@@ -1,0 +1,252 @@
+import React, { useEffect, useState } from 'react'
+import { useAuth } from '../lib/AuthContext'
+import api from '../lib/api'
+import { useNavigate } from 'react-router-dom'
+
+export default function Dashboard() {
+  const { user, hasRole } = useAuth()
+  const [registrations, setRegistrations] = useState([])
+  const [createdEvents, setCreatedEvents] = useState([])
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  const isGeneralLike = hasRole('GENERAL_USER') || hasRole('CLUB_ASSOCIATE')
+  const isCreatorRole = hasRole('ADMIN') || hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE')
+
+  useEffect(() => {
+    const calls = []
+    // Registrations only matter for general users and club associates
+    if (isGeneralLike) {
+      calls.push(api.get('/api/registrations/mine').catch(() => ({ key: 'regs', data: [] })))
+    } else {
+      calls.push(Promise.resolve({ key: 'regs', data: [] }))
+    }
+    // Created events for roles that can create
+    if (isCreatorRole) {
+      calls.push(api.get('/api/events/mine').catch(() => ({ key: 'created', data: [] })))
+      calls.push(api.get('/api/room-requests/mine').catch(() => ({ key: 'bookings', data: [] })))
+    } else {
+      calls.push(Promise.resolve({ key: 'created', data: [] }))
+      calls.push(Promise.resolve({ key: 'bookings', data: [] }))
+    }
+
+    Promise.all(calls).then(([regsRes, createdRes, bookingsRes]) => {
+      setRegistrations(regsRes.data || [])
+      setCreatedEvents(createdRes.data || [])
+      setBookings(bookingsRes.data || [])
+    }).finally(() => setLoading(false))
+  }, [isGeneralLike, isCreatorRole])
+
+  const now = new Date()
+  const upcomingRegs = registrations.filter(e => e.startTime && new Date(e.endTime) >= now)
+  const pastRegs = registrations.filter(e => e.endTime && new Date(e.endTime) < now)
+
+  const getStatusBadge = (status) => {
+    const s = (status || '').toUpperCase()
+    if (s === 'CONFIRMED') return 'bg-green-100 text-green-800'
+    if (s === 'APPROVED') return 'bg-blue-100 text-blue-800'
+    if (s === 'PENDING') return 'bg-yellow-100 text-yellow-800'
+    if (s === 'REJECTED') return 'bg-red-100 text-red-800'
+    return 'bg-gray-100 text-gray-800'
+  }
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+        <p className="text-gray-600">Welcome back, {user?.sub}!</p>
+      </div>
+
+      {/* Quick Stats (role-aware) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {isGeneralLike && (
+          <div className="card text-center">
+            <div className="text-2xl font-bold text-primary mb-2">{upcomingRegs.length}</div>
+            <div className="text-gray-600">Upcoming Registrations</div>
+          </div>
+        )}
+        {isCreatorRole && (
+          <div className="card text-center">
+            <div className="text-2xl font-bold text-primary mb-2">{createdEvents.length}</div>
+            <div className="text-gray-600">Events Created</div>
+          </div>
+        )}
+        {isCreatorRole && (
+          <div className="card text-center">
+            <div className="text-2xl font-bold text-primary mb-2">{bookings.length}</div>
+            <div className="text-gray-600">Room Requests</div>
+          </div>
+        )}
+        {isGeneralLike && (
+          <div className="card text-center">
+            <div className="text-2xl font-bold text-primary mb-2">{pastRegs.length}</div>
+            <div className="text-gray-600">Past Events</div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* My Registered Events - only for GENERAL_USER / CLUB_ASSOCIATE */}
+        {isGeneralLike && (
+          <div className="card">
+            <h2 className="text-xl font-semibold mb-4">My Registered Events</h2>
+            {loading ? (
+              <div className="text-gray-500 text-sm">Loading...</div>
+            ) : registrations.length === 0 ? (
+              <div className="text-gray-500 text-sm">No registrations yet.</div>
+            ) : (
+              <div className="space-y-4">
+                {registrations.map(ev => (
+                  <div key={ev.eventId} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-medium text-gray-900">{ev.title}</h3>
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Registered</span>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {ev.startTime && (
+                        <>
+                          📅 {new Date(ev.startTime).toLocaleDateString()} · {new Date(ev.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                        </>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      📍 {ev.location || 'TBD'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* My Created Events - for ADMIN/FACULTY/CLUB_ASSOCIATE */}
+        {isCreatorRole && (
+          <div className="card">
+            <h2 className="text-xl font-semibold mb-4">Events I Created</h2>
+            {loading ? (
+              <div className="text-gray-500 text-sm">Loading...</div>
+            ) : createdEvents.length === 0 ? (
+              <div className="text-gray-500 text-sm">No events created yet.</div>
+            ) : (
+              <div className="space-y-4">
+                {createdEvents.map(ev => {
+                  const start = ev.startTime ? new Date(ev.startTime) : null
+                  const editable = start && (start.getTime() - now.getTime()) > 2 * 24 * 60 * 60 * 1000
+                  return (
+                    <div key={ev.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h3 className="font-medium text-gray-900">{ev.title}</h3>
+                          <div className="text-xs text-gray-500">
+                            {ev.startTime && (
+                              <>
+                                📅 {new Date(ev.startTime).toLocaleDateString()} · {new Date(ev.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                          {editable ? 'Editable' : 'Locked (<2 days)'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        📍 {ev.location || 'TBD'}
+                      </div>
+                      <div className="mt-3 flex space-x-2">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm flex-1"
+                          disabled={!editable}
+                          onClick={() => editable && navigate(`/events/edit/${ev.id}`)}
+                        >
+                          View / Edit Event
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* My Room Bookings - only for creator roles (they can book rooms) */}
+        {isCreatorRole && (
+          <div className="card">
+            <h2 className="text-xl font-semibold mb-4">My Room Requests</h2>
+            {loading ? (
+              <div className="text-gray-500 text-sm">Loading...</div>
+            ) : bookings.length === 0 ? (
+              <div className="text-gray-500 text-sm">No room requests yet.</div>
+            ) : (
+              <div className="space-y-4">
+                {bookings.map(b => {
+                  const start = b.start ? new Date(b.start) : null
+                  const canCancel = b.status === 'PENDING' && start && (start.getTime() - now.getTime()) > 2 * 24 * 60 * 60 * 1000
+                  const onCancel = async () => {
+                    try {
+                      await api.post(`/api/room-requests/${b.id}/cancel`)
+                      setBookings(prev => prev.map(x => x.id === b.id ? { ...x, status: 'REJECTED' } : x))
+                    } catch (err) {
+                      // optional: surface error later
+                    }
+                  }
+                  return (
+                    <div key={b.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h3 className="font-medium text-gray-900">{b.eventTitle || 'Meeting'}</h3>
+                          <p className="text-sm text-gray-600">Allocated: {b.allocatedRoom || 'TBD'}</p>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-full ${getStatusBadge(b.status)}`}>
+                          {(b.status || '').charAt(0) + (b.status || '').slice(1).toLowerCase()}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {b.start && (
+                          <>📅 {new Date(b.start).toLocaleDateString()} · {new Date(b.start).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Preferences: {b.pref1} → {b.pref2} → {b.pref3}
+                      </div>
+                      <div className="mt-3 flex space-x-2">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm flex-1"
+                          disabled={!canCancel}
+                          onClick={canCancel ? onCancel : undefined}
+                        >
+                          {canCancel ? 'Cancel Request' : 'Cannot cancel (<2 days or not pending)'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="card mt-8">
+        <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <a href="/events" className="btn btn-primary w-full">
+            Browse Events
+          </a>
+          <a href="/book-room" className="btn btn-secondary w-full">
+            Book a Room
+          </a>
+          <a href="/bookings" className="btn btn-secondary w-full">
+            View All Bookings
+          </a>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
