@@ -11,9 +11,12 @@ A comprehensive event management platform built with a modern tech stack to faci
 - Axios for API calls
 
 ### Backend
-- Node.js
-- Express.js
-- JWT Authentication
+- Java 17
+- Spring Boot 3.3.4
+- Spring Security (JWT Authentication)
+- Spring Data JPA
+- MySQL Database
+- Maven
 - Role-Based Access Control (RBAC)
 
 ## Features
@@ -31,17 +34,20 @@ A comprehensive event management platform built with a modern tech stack to faci
 
 ```
 EventManagement/
-├── frontend/          # React frontend application
-├── backend/           # Node.js backend API
-├── .gitignore         # Git ignore file
-└── README.md          # This file
+├── frontend/                    # React frontend application
+├── backend/event-management/     # Spring Boot backend API
+├── .gitignore                   # Git ignore file
+└── README.md                    # This file
 ```
 
 ## Getting Started
 
 ### Prerequisites
+- Java 17 or higher
+- Maven 3.6 or higher
 - Node.js (v14 or higher)
 - npm or yarn
+- MySQL Database
 
 ### Installation
 
@@ -51,10 +57,11 @@ git clone <repository-url>
 cd EventManagement
 ```
 
-2. Install backend dependencies:
+2. Set up the backend:
 ```bash
-cd backend
-npm install
+cd backend/event-management
+# Configure database connection in src/main/resources/application.yml
+mvn clean install
 ```
 
 3. Install frontend dependencies:
@@ -67,19 +74,19 @@ npm install
 
 1. Start the backend server:
 ```bash
-cd backend
-npm start
+cd backend/event-management
+mvn spring-boot:run
 ```
 
 2. Start the frontend development server:
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
 
 The application will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
+- Frontend: http://localhost:5173 (Vite default)
+- Backend API: http://localhost:8080 (Spring Boot default)
 
 ## Authentication Flow
 
