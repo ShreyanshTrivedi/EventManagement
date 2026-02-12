@@ -61,20 +61,24 @@ export default function Events() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Campus Events</h1>
-        <p className="text-gray-600">Discover and register for upcoming events</p>
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Campus Events</h1>
+          <p className="text-gray-600">Discover and register for upcoming events</p>
+        </div>
         {(hasRole('ADMIN') || hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE')) && (
-          <div className="mt-4 space-x-2">
+          <div className="flex gap-2">
             <Link to="/events/create" className="btn btn-primary">Create Event</Link>
-            <Link to="/events/create-enhanced" className="btn btn-secondary">Create Event with Room</Link>
           </div>
         )}
       </div>
 
       {/* Calendar View */}
       <div className="card mb-8">
-        <h2 className="text-xl font-semibold mb-4">Event Calendar</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Event Calendar</h2>
+          <div className="text-xs text-gray-500">Click an event to register (if eligible)</div>
+        </div>
         <FullCalendar 
           plugins={[dayGridPlugin, timeGridPlugin]} 
           initialView="dayGridMonth" 
@@ -96,7 +100,12 @@ export default function Events() {
       
       {/* Event List */}
       <div className="card">
-        <h2 className="text-xl font-semibold mb-6">Upcoming Events</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold">Upcoming Events</h2>
+          <span className="text-xs px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+            Next 15 days: {upcomingEvents.length}
+          </span>
+        </div>
         {upcomingEvents.length === 0 ? (
           <div className="text-center py-8">
             <div className="text-4xl mb-4">📅</div>
@@ -105,7 +114,7 @@ export default function Events() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {upcomingEvents.map(event => (
-              <div key={event.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+              <div key={event.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow" style={{ background: 'rgba(255,255,255,0.8)' }}>
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
                   <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">

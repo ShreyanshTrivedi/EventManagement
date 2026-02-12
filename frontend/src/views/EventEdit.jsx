@@ -91,13 +91,20 @@ export default function EventEdit() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Edit Event</h1>
-        <p className="text-gray-600">Update event details. Editing is blocked within 2 days of the start time.</p>
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Edit Event</h1>
+          <p className="text-slate-600">Update event details. Editing is blocked within 2 days of the start time.</p>
+        </div>
+        <button type="button" className="btn btn-secondary" onClick={() => navigate('/dashboard')}>Back</button>
       </div>
 
       <div className="card">
         <form onSubmit={onSubmit} className="space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
+            <div className="text-sm font-semibold text-slate-900">Event details</div>
+            <div className="mt-1 text-sm text-slate-600">Update title, location and schedule.</div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-group">
               <label className="form-label">Event Title</label>
@@ -111,7 +118,7 @@ export default function EventEdit() {
 
           <div className="form-group">
             <label className="form-label">Description</label>
-            <textarea className="form-input" value={description} onChange={e => setDescription(e.target.value)} />
+            <textarea className="form-input" rows={4} value={description} onChange={e => setDescription(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,14 +136,16 @@ export default function EventEdit() {
             <label className="form-label">Club ID (optional)</label>
             <input className="form-input" value={club} onChange={e => setClub(e.target.value)} />
           </div>
+          </div>
 
-          <div>
-            <label className="form-label">Registration Fields</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
+            <div className="text-sm font-semibold text-slate-900">Registration fields</div>
+            <div className="mt-1 text-sm text-slate-600">Choose what attendees must fill during registration.</div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {['full_name','email','phone','student_id','department','year','tshirt_size','dietary_pref','comments'].map(key => (
-                <label key={key} className="inline-flex items-center space-x-2">
+                <label key={key} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700">
                   <input type="checkbox" checked={selected.includes(key)} onChange={() => toggleField(key)} />
-                  <span className="text-sm text-gray-700">{key.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>
+                  <span>{key.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>
                 </label>
               ))}
             </div>
@@ -145,9 +154,12 @@ export default function EventEdit() {
           {error && <div className="alert alert-error">{error}</div>}
           {message && <div className="alert alert-success">{message}</div>}
 
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <button type="button" className="btn btn-secondary" onClick={() => navigate('/dashboard')} disabled={saving}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

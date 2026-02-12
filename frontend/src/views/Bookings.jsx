@@ -23,17 +23,57 @@ export default function Bookings() {
     }
   }
 
+  const stats = (() => {
+    const total = bookings.length
+    const pending = bookings.filter(b => String(b.status || '').toUpperCase() === 'PENDING').length
+    const approved = bookings.filter(b => String(b.status || '').toUpperCase() === 'APPROVED').length
+    const confirmed = bookings.filter(b => String(b.status || '').toUpperCase() === 'CONFIRMED').length
+    const allocatedRooms = new Set(bookings.map(b => b.allocatedRoom).filter(Boolean))
+    let minutes = 0
+    for (const b of bookings) {
+      if (!b.start || !b.end) continue
+      const s = new Date(b.start)
+      const e = new Date(b.end)
+      const diff = (e.getTime() - s.getTime()) / 60000
+      if (Number.isFinite(diff) && diff > 0) minutes += diff
+    }
+    const hoursBooked = Math.round((minutes / 60) * 10) / 10
+    return { total, pending, approved, confirmed, rooms: allocatedRooms.size, hoursBooked }
+  })()
+
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">My Room Requests</h1>
-        <p className="text-gray-600">Track your room booking requests and their approval status</p>
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">My Room Requests</h1>
+          <p className="text-slate-600">Track your room booking requests and their approval status</p>
+        </div>
+        <div className="flex gap-2">
+          <Link to="/book-room" className="btn btn-primary">Book a New Room</Link>
+        </div>
       </div>
 
-      <div className="mb-6">
-        <Link to="/book-room" className="btn btn-primary">
-          Book a New Room
-        </Link>
+      {error && (
+        <div className="alert alert-error mb-6">{error}</div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="card">
+          <div className="text-sm text-slate-600">Total</div>
+          <div className="mt-1 text-3xl font-bold text-slate-900">{stats.total}</div>
+        </div>
+        <div className="card">
+          <div className="text-sm text-slate-600">Pending</div>
+          <div className="mt-1 text-3xl font-bold text-slate-900">{stats.pending}</div>
+        </div>
+        <div className="card">
+          <div className="text-sm text-slate-600">Confirmed</div>
+          <div className="mt-1 text-3xl font-bold text-slate-900">{stats.confirmed}</div>
+        </div>
+        <div className="card">
+          <div className="text-sm text-slate-600">Hours booked</div>
+          <div className="mt-1 text-3xl font-bold text-slate-900">{stats.hoursBooked}</div>
+        </div>
       </div>
 
       {loading ? (
@@ -91,29 +131,6 @@ export default function Bookings() {
           ))}
         </div>
       )}
-
-      {/* Booking Statistics */}
-      <div className="card mt-8">
-        <h2 className="text-xl font-semibold mb-4">Booking Statistics</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary mb-2">12</div>
-            <div className="text-gray-600">Total Bookings</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary mb-2">8</div>
-            <div className="text-gray-600">This Month</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary mb-2">24</div>
-            <div className="text-gray-600">Hours Booked</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary mb-2">5</div>
-            <div className="text-gray-600">Different Rooms</div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

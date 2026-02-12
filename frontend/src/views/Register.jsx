@@ -49,26 +49,31 @@ export default function Register() {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="card">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Create Account</h1>
-          <p className="text-gray-600">Choose a role. General Users are registered instantly. Other roles require admin approval.</p>
+      <div className="card p-0 overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-br from-blue-50 to-white">
+          <div className="text-sm font-semibold text-blue-700">Campus Events</div>
+          <div className="mt-1 text-2xl font-bold text-slate-900">Create account</div>
+          <div className="text-sm text-slate-600">General users are registered instantly. Other roles need admin approval.</div>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <input className="form-input" value={username} onChange={(e)=>setUsername(e.target.value)} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Role</label>
-            <select className="form-select" value={role} onChange={(e)=>setRole(e.target.value)}>
-              <option value="GENERAL_USER">General User</option>
-              <option value="FACULTY">Faculty</option>
-              <option value="CLUB_ASSOCIATE">Club Associate</option>
-              <option value="ADMIN">Admin</option>
-            </select>
-          </div>
+        <div className="p-6">
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="form-group">
+              <label className="form-label">Username</label>
+              <input className="form-input" value={username} onChange={(e)=>setUsername(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Role</label>
+              <select className="form-select" value={role} onChange={(e)=>setRole(e.target.value)}>
+                <option value="GENERAL_USER">General User</option>
+                <option value="FACULTY">Faculty</option>
+                <option value="CLUB_ASSOCIATE">Club Associate</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+              <div className="mt-2 text-xs text-slate-500">
+                General users can register for events. Faculty/Club/Admin roles require approval.
+              </div>
+            </div>
           <div className="form-group">
             <label className="form-label">Email</label>
             <input
@@ -90,16 +95,17 @@ export default function Register() {
             <input type="password" className="form-input" value={confirm} onChange={(e)=>setConfirm(e.target.value)} required />
           </div>
 
-          {error && <div className="alert alert-error">{error}</div>}
-          {message && <div className="alert alert-success">{message}</div>}
+            {error && <div className="alert alert-error">{error}</div>}
+            {message && <div className="alert alert-success">{message}</div>}
 
-          <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-            {loading ? 'Creating account...' : 'Create Account'}
-          </button>
-        </form>
+            <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+              {loading ? 'Creating account...' : 'Create Account'}
+            </button>
+          </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">Already have an account? <Link to="/login" className="text-primary hover:underline">Sign in</Link></p>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-slate-600">Already have an account? <Link to="/login" className="text-blue-700 hover:underline">Sign in</Link></p>
+          </div>
         </div>
       </div>
     </div>

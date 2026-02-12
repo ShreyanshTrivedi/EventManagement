@@ -52,74 +52,77 @@ export default function Login() {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="card">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to your account to continue</p>
+      <div className="card p-0 overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-br from-blue-50 to-white">
+          <div className="text-sm font-semibold text-blue-700">Campus Events</div>
+          <div className="mt-1 text-2xl font-bold text-slate-900">Welcome back</div>
+          <div className="text-sm text-slate-600">Sign in to continue</div>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <input
-              type="text"
-              className="form-input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              required
-            />
-          </div>
-
-          {error && (
-            <div className="alert alert-error">
-              {error}
+        <div className="p-6">
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="form-group">
+              <label className="form-label">Username</label>
+              <input
+                type="text"
+                className="form-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
+                required
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            className="btn btn-primary w-full"
-            disabled={loading}
-          >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="spinner mr-2"></div>
-                Signing in...
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                className="form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+              />
+            </div>
+
+            {error && (
+              <div className="alert alert-error">
+                {error}
               </div>
-            ) : (
-              'Sign In'
             )}
-          </button>
-        </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            New here? <Link to="/register" className="text-primary hover:underline">Create an account</Link>
-          </p>
-        </div>
+            <button
+              type="submit"
+              className="btn btn-primary w-full"
+              disabled={loading}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center">
+                  <div className="spinner mr-2"></div>
+                  Signing in...
+                </div>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Demo accounts available:
-          </p>
-          <div className="mt-2 text-xs text-gray-500 space-y-1">
-            <div>admin / Admin@123</div>
-            <div>faculty / Faculty@123</div>
-            <div>club / Club@123</div>
-            <div>user / User@123</div>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-slate-600">
+              New here? <Link to="/register" className="text-blue-700 hover:underline">Create an account</Link>
+            </p>
+          </div>
+
+          <div className="mt-6">
+            <div className="rounded-xl border border-slate-200 bg-white/60 p-4">
+              <div className="text-xs font-semibold text-slate-700">Demo accounts</div>
+              <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-slate-600">
+                <div><span className="font-medium text-slate-700">admin</span> / Admin@123</div>
+                <div><span className="font-medium text-slate-700">faculty</span> / Faculty@123</div>
+                <div><span className="font-medium text-slate-700">club</span> / Club@123</div>
+                <div><span className="font-medium text-slate-700">user</span> / User@123</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

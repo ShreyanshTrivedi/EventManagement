@@ -53,35 +53,71 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-        <p className="text-gray-600">Welcome back, {user?.sub}!</p>
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600">Welcome back, {user?.sub}!</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/events')}>Browse Events</button>
+          {(hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE') || hasRole('ADMIN')) && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate('/book-room')}>Book Room</button>
+          )}
+        </div>
       </div>
 
       {/* Quick Stats (role-aware) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         {isGeneralLike && (
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-primary mb-2">{upcomingRegs.length}</div>
-            <div className="text-gray-600">Upcoming Registrations</div>
+          <div className="card">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm text-gray-600">Upcoming Registrations</div>
+                <div className="text-3xl font-bold text-gray-900 mt-1">{upcomingRegs.length}</div>
+              </div>
+              <div className="h-10 w-10 rounded-lg" style={{ background: 'rgba(59,130,246,0.12)' }}>
+                <div className="h-10 w-10 flex items-center justify-center text-lg">📌</div>
+              </div>
+            </div>
           </div>
         )}
         {isCreatorRole && (
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-primary mb-2">{createdEvents.length}</div>
-            <div className="text-gray-600">Events Created</div>
+          <div className="card">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm text-gray-600">Events Created</div>
+                <div className="text-3xl font-bold text-gray-900 mt-1">{createdEvents.length}</div>
+              </div>
+              <div className="h-10 w-10 rounded-lg" style={{ background: 'rgba(16,185,129,0.12)' }}>
+                <div className="h-10 w-10 flex items-center justify-center text-lg">🗓️</div>
+              </div>
+            </div>
           </div>
         )}
         {isCreatorRole && (
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-primary mb-2">{bookings.length}</div>
-            <div className="text-gray-600">Room Requests</div>
+          <div className="card">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm text-gray-600">Room Requests</div>
+                <div className="text-3xl font-bold text-gray-900 mt-1">{bookings.length}</div>
+              </div>
+              <div className="h-10 w-10 rounded-lg" style={{ background: 'rgba(245,158,11,0.16)' }}>
+                <div className="h-10 w-10 flex items-center justify-center text-lg">🏢</div>
+              </div>
+            </div>
           </div>
         )}
         {isGeneralLike && (
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-primary mb-2">{pastRegs.length}</div>
-            <div className="text-gray-600">Past Events</div>
+          <div className="card">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm text-gray-600">Past Events</div>
+                <div className="text-3xl font-bold text-gray-900 mt-1">{pastRegs.length}</div>
+              </div>
+              <div className="h-10 w-10 rounded-lg" style={{ background: 'rgba(100,116,139,0.14)' }}>
+                <div className="h-10 w-10 flex items-center justify-center text-lg">✅</div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -90,7 +126,12 @@ export default function Dashboard() {
         {/* My Registered Events - only for GENERAL_USER / CLUB_ASSOCIATE */}
         {isGeneralLike && (
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">My Registered Events</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">My Registered Events</h2>
+              <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                {registrations.length} total
+              </span>
+            </div>
             {loading ? (
               <div className="text-gray-500 text-sm">Loading...</div>
             ) : registrations.length === 0 ? (
@@ -98,7 +139,7 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-4">
                 {registrations.map(ev => (
-                  <div key={ev.eventId} className="border border-gray-200 rounded-lg p-4">
+                  <div key={ev.eventId} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow" style={{ background: 'rgba(255,255,255,0.8)' }}>
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="font-medium text-gray-900">{ev.title}</h3>
                       <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Registered</span>
@@ -123,7 +164,10 @@ export default function Dashboard() {
         {/* My Created Events - for ADMIN/FACULTY/CLUB_ASSOCIATE */}
         {isCreatorRole && (
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Events I Created</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Events I Created</h2>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/events/create')}>Create</button>
+            </div>
             {loading ? (
               <div className="text-gray-500 text-sm">Loading...</div>
             ) : createdEvents.length === 0 ? (
@@ -134,7 +178,7 @@ export default function Dashboard() {
                   const start = ev.startTime ? new Date(ev.startTime) : null
                   const editable = start && (start.getTime() - now.getTime()) > 2 * 24 * 60 * 60 * 1000
                   return (
-                    <div key={ev.id} className="border border-gray-200 rounded-lg p-4">
+                    <div key={ev.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow" style={{ background: 'rgba(255,255,255,0.8)' }}>
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h3 className="font-medium text-gray-900">{ev.title}</h3>
@@ -174,7 +218,10 @@ export default function Dashboard() {
         {/* My Room Bookings - only for creator roles (they can book rooms) */}
         {isCreatorRole && (
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">My Room Requests</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">My Room Requests</h2>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/book-room')}>New</button>
+            </div>
             {loading ? (
               <div className="text-gray-500 text-sm">Loading...</div>
             ) : bookings.length === 0 ? (
@@ -193,7 +240,7 @@ export default function Dashboard() {
                     }
                   }
                   return (
-                    <div key={b.id} className="border border-gray-200 rounded-lg p-4">
+                    <div key={b.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow" style={{ background: 'rgba(255,255,255,0.8)' }}>
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h3 className="font-medium text-gray-900">{b.eventTitle || 'Meeting'}</h3>

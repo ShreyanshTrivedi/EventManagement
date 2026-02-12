@@ -71,9 +71,12 @@ export default function CreateEvent() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Event</h1>
-        <p className="text-gray-600">Provide event details and choose registration fields for attendees.</p>
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Create Event</h1>
+          <p className="text-slate-600">Provide event details and choose registration fields for attendees.</p>
+        </div>
+        <button type="button" className="btn btn-secondary" onClick={() => navigate('/events')}>Back</button>
       </div>
 
       {!allowed ? (
@@ -81,6 +84,10 @@ export default function CreateEvent() {
       ) : (
         <div className="card">
           <form onSubmit={onSubmit} className="space-y-6">
+            <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
+              <div className="text-sm font-semibold text-slate-900">Event details</div>
+              <div className="mt-1 text-sm text-slate-600">Title, description, location and schedule.</div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="form-label">Event Title</label>
@@ -94,7 +101,7 @@ export default function CreateEvent() {
 
             <div className="form-group">
               <label className="form-label">Description</label>
-              <textarea className="form-input" value={description} onChange={(e)=>setDescription(e.target.value)} />
+              <textarea className="form-input" rows={4} value={description} onChange={(e)=>setDescription(e.target.value)} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -112,26 +119,31 @@ export default function CreateEvent() {
               <label className="form-label">Club ID (optional)</label>
               <input className="form-input" value={club} onChange={(e)=>setClub(e.target.value)} placeholder="If empty, uses your club automatically" />
             </div>
+            </div>
 
-            <div>
-              <label className="form-label">Registration Fields</label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
+              <div className="text-sm font-semibold text-slate-900">Registration fields</div>
+              <div className="mt-1 text-sm text-slate-600">Choose what attendees must fill during registration.</div>
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                 {FIELD_OPTIONS.map(opt => (
-                  <label key={opt.key} className="inline-flex items-center space-x-2">
+                  <label key={opt.key} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700">
                     <input type="checkbox" checked={selected.includes(opt.key)} onChange={()=>toggleField(opt.key)} />
-                    <span className="text-sm text-gray-700">{opt.label}</span>
+                    <span>{opt.label}</span>
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-gray-500 mt-2">Full Name and Email are preselected by default.</p>
+              <p className="text-xs text-slate-500 mt-3">Full Name and Email are preselected by default.</p>
             </div>
 
             {error && <div className="alert alert-error">{error}</div>}
             {message && <div className="alert alert-success">{message}</div>}
 
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Event'}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button type="button" className="btn btn-secondary" onClick={() => navigate('/events')} disabled={loading}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Creating...' : 'Create Event'}
+              </button>
+            </div>
           </form>
         </div>
       )}

@@ -13,7 +13,6 @@ import Register from '../views/Register'
 import ProtectedRoute from './ProtectedRoute'
 import AdminRoleRequests from '../views/AdminRoleRequests'
 import CreateEvent from '../views/CreateEvent'
-import EnhancedEventBooking from '../views/EnhancedEventBooking'
 import EventEdit from '../views/EventEdit'
 import AdminRoomApprovals from '../views/AdminRoomApprovals'
 
@@ -28,7 +27,6 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/create" element={<ProtectedRoute roles={['FACULTY','CLUB_ASSOCIATE','ADMIN']}><CreateEvent /></ProtectedRoute>} />
-          <Route path="/events/create-enhanced" element={<ProtectedRoute roles={['FACULTY','CLUB_ASSOCIATE','ADMIN']}><EnhancedEventBooking /></ProtectedRoute>} />
           <Route path="/events/edit/:id" element={<ProtectedRoute roles={['FACULTY','CLUB_ASSOCIATE','ADMIN']}><EventEdit /></ProtectedRoute>} />
           <Route path="/bookings" element={<ProtectedRoute roles={['FACULTY','CLUB_ASSOCIATE','ADMIN']}><Bookings /></ProtectedRoute>} />
           <Route path="/register/:eventId" element={<ProtectedRoute roles={['GENERAL_USER','CLUB_ASSOCIATE']}><EventRegistration /></ProtectedRoute>} />

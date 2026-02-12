@@ -13,6 +13,11 @@ export default function EventRegistration() {
   const [event, setEvent] = useState(null)
   const [closed, setClosed] = useState(false)
 
+  const isErrorMessage = (m) => {
+    if (!m) return false
+    return /(failed|error|closed|please enter|invalid)/i.test(String(m))
+  }
+
   useEffect(() => {
     api.get(`/api/public/events/${eventId}`)
       .then(res => setEvent(res.data))
@@ -72,15 +77,17 @@ export default function EventRegistration() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Event Registration</h1>
+          <p className="text-slate-600">Complete your registration for this event</p>
+        </div>
         <button 
           onClick={() => navigate('/events')}
-          className="btn btn-secondary btn-sm mb-4"
+          className="btn btn-secondary"
         >
-          ← Back to Events
+          ← Back
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Event Registration</h1>
-        <p className="text-gray-600">Complete your registration for this event</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -89,25 +96,25 @@ export default function EventRegistration() {
           <h2 className="text-xl font-semibold mb-4">Event Details</h2>
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium text-gray-900">{event.title}</h3>
+              <h3 className="font-semibold text-slate-900">{event.title}</h3>
               {event.description && (
-                <p className="text-gray-600 text-sm mt-1">{event.description}</p>
+                <p className="text-slate-600 text-sm mt-1">{event.description}</p>
               )}
             </div>
             
             <div className="space-y-2">
-              <div className="flex items-center text-sm text-gray-500">
+              <div className="flex items-center text-sm text-slate-500">
                 <span className="mr-2">📅</span>
                 <span>{new Date(event.startTime).toLocaleDateString()}</span>
               </div>
-              <div className="flex items-center text-sm text-gray-500">
+              <div className="flex items-center text-sm text-slate-500">
                 <span className="mr-2">🕐</span>
                 <span>
                   {new Date(event.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
                   {new Date(event.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                 </span>
               </div>
-              <div className="flex items-center text-sm text-gray-500">
+              <div className="flex items-center text-sm text-slate-500">
                 <span className="mr-2">📍</span>
                 <span>{event.location || 'TBD'}</span>
               </div>
@@ -161,7 +168,7 @@ export default function EventRegistration() {
             ))}
 
             {message && (
-              <div className={`alert ${message.includes('successful') ? 'alert-success' : 'alert-error'}`}>
+              <div className={`alert ${isErrorMessage(message) ? 'alert-error' : 'alert-success'}`}>
                 {message}
               </div>
             )}
@@ -182,13 +189,13 @@ export default function EventRegistration() {
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-medium text-gray-900 mb-2">Registration Terms</h3>
-            <div className="text-sm text-gray-600 space-y-1">
-              <div>• Registration is free and open to all campus members</div>
-              <div>• You will receive a confirmation email after registration</div>
-              <div>• Please arrive 10 minutes before the event starts</div>
-              <div>• Contact the organizer if you need to cancel</div>
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white/70 p-4">
+            <h3 className="font-semibold text-slate-900 mb-2">Registration Terms</h3>
+            <div className="text-sm text-slate-600 space-y-1">
+              <div>Registration is free and open to all campus members</div>
+              <div>You will receive a confirmation after registration</div>
+              <div>Please arrive 10 minutes before the event starts</div>
+              <div>Contact the organizer if you need to cancel</div>
             </div>
           </div>
         </div>

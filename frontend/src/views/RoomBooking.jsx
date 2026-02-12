@@ -380,24 +380,38 @@ export default function RoomBooking() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Book a Room</h1>
-        <p className="text-gray-600">Reserve conference rooms, lecture halls, and meeting spaces</p>
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Book a Room</h1>
+          <p className="text-slate-600">Reserve conference rooms, lecture halls, and meeting spaces</p>
+        </div>
+        <div className="text-xs text-slate-500">
+          {isFaculty ? 'Faculty: instant approval' : 'Club: admin approval'}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Booking Form */}
         <div className="lg:col-span-2">
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Room Reservation</h2>
-
-            <div className="flex space-x-4 mb-4">
-              <button type="button" className={`btn btn-sm ${mode === 'event' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('event')}>
-                For Event
-              </button>
-              <button type="button" className={`btn btn-sm ${mode === 'meeting' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('meeting')}>
-                For Meeting
-              </button>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Room Reservation</h2>
+              <div className="inline-flex rounded-xl border border-slate-200 bg-white/70 p-1">
+                <button
+                  type="button"
+                  className={`btn btn-sm ${mode === 'event' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setMode('event')}
+                >
+                  For Event
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${mode === 'meeting' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setMode('meeting')}
+                >
+                  For Meeting
+                </button>
+              </div>
             </div>
             
             <form onSubmit={onSubmit} className="space-y-6">
@@ -445,7 +459,7 @@ export default function RoomBooking() {
                 </div>
               ) : (
                 <>
-                  <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="bg-blue-50/70 border border-blue-100 p-3 rounded-lg">
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
@@ -520,8 +534,8 @@ export default function RoomBooking() {
                   {useFixedSlotsForMeeting && Number(pref1) > 0 && meetingDate && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-600">Select up to 3 consecutive slots</div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-slate-600">Select up to 3 consecutive slots</div>
+                        <div className="text-sm text-slate-600">
                           {fixedSlotLoading ? 'Checking availability…' : ''}
                         </div>
                       </div>
@@ -532,6 +546,11 @@ export default function RoomBooking() {
                           const hasWindow = Object.keys(slotWindowAvailability).length > 0
                           const isAvailable = fixedOk && (hasWindow ? windowOk !== false : true)
                           const isSelected = selectedSlots.includes(slot)
+                          const slotCls = isSelected
+                            ? 'bg-blue-600 text-white border-blue-700'
+                            : isAvailable
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-rose-50 text-rose-800 border-rose-200'
                           return (
                             <button
                               key={slot}
@@ -547,26 +566,23 @@ export default function RoomBooking() {
                                   return next
                                 })
                               }}
-                              className="p-2 rounded text-sm border"
-                              style={{
-                                backgroundColor: isSelected ? '#2563eb' : isAvailable ? '#dcfce7' : '#fee2e2',
-                                borderColor: isSelected ? '#1d4ed8' : isAvailable ? '#86efac' : '#fecaca',
-                                color: isSelected ? '#ffffff' : isAvailable ? '#166534' : '#991b1b',
-                                cursor: isAvailable ? 'pointer' : 'not-allowed',
-                                opacity: isAvailable ? 1 : 0.65
-                              }}
+                              className={`p-2 rounded-lg text-sm border transition ${slotCls} ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
                             >
                               <div className="font-medium">{slot}</div>
                             </button>
                           )
                         })}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Green: available
-                        {' '}
-                        Red: occupied by class/booking
-                        {' '}
-                        Blue: selected
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1">
+                          Available
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1">
+                          Occupied
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1">
+                          Selected
+                        </span>
                       </div>
                     </div>
                   )}
@@ -675,8 +691,8 @@ export default function RoomBooking() {
               {mode === 'event' && Number(pref1) > 0 && eventId && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-600">Fixed-slot availability (from weekly class timetable)</div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-slate-600">Fixed-slot availability (from weekly class timetable)</div>
+                    <div className="text-sm text-slate-600">
                       {fixedSlotLoading ? 'Checking availability…' : ''}
                     </div>
                   </div>
@@ -686,12 +702,7 @@ export default function RoomBooking() {
                       return (
                         <div
                           key={slot}
-                          className="p-2 rounded text-sm border"
-                          style={{
-                            backgroundColor: isAvailable ? '#dcfce7' : '#fee2e2',
-                            borderColor: isAvailable ? '#86efac' : '#fecaca',
-                            color: isAvailable ? '#166534' : '#991b1b'
-                          }}
+                          className={`p-2 rounded-lg text-sm border ${isAvailable ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}
                         >
                           <div className="font-medium">{slot}</div>
                           <div className="text-xs">{isAvailable ? 'Available' : 'Occupied'}</div>
@@ -740,8 +751,8 @@ export default function RoomBooking() {
                   key={room.id} 
                   className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                     Number(pref1) === room.id 
-                      ? 'border-primary bg-blue-50' 
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-blue-300 bg-blue-50/60' 
+                      : 'border-slate-200 hover:border-slate-300'
                   }`}
                   onClick={() => {
                     setPref1(String(room.id))
@@ -751,10 +762,10 @@ export default function RoomBooking() {
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <h4 className="font-medium text-gray-900">{room.name}</h4>
-                      <p className="text-sm text-gray-600">{room.location}</p>
+                      <h4 className="font-semibold text-slate-900">{room.name}</h4>
+                      <p className="text-sm text-slate-600">{room.location}</p>
                     </div>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                    <span className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded">
                       {room.capacity} seats
                     </span>
                   </div>
