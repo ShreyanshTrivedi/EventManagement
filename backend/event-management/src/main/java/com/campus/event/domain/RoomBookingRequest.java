@@ -48,6 +48,37 @@ public class RoomBookingRequest {
     private LocalDateTime meetingStart;
     private LocalDateTime meetingEnd;
     private String meetingPurpose;
+    
+    // Helper methods for schedule management
+    public java.time.LocalDate getDate() {
+        if (event != null && event.getStartTime() != null) {
+            return event.getStartTime().toLocalDate();
+        }
+        if (meetingStart != null) {
+            return meetingStart.toLocalDate();
+        }
+        return requestedAt.toLocalDate();
+    }
+    
+    public java.time.LocalTime getStartTime() {
+        if (event != null && event.getStartTime() != null) {
+            return event.getStartTime().toLocalTime();
+        }
+        if (meetingStart != null) {
+            return meetingStart.toLocalTime();
+        }
+        return requestedAt.toLocalTime();
+    }
+    
+    public java.time.LocalTime getEndTime() {
+        if (event != null && event.getEndTime() != null) {
+            return event.getEndTime().toLocalTime();
+        }
+        if (meetingEnd != null) {
+            return meetingEnd.toLocalTime();
+        }
+        return requestedAt.toLocalTime().plusHours(1);
+    }
 
     public Long getId() { return id; }
     public Event getEvent() { return event; }

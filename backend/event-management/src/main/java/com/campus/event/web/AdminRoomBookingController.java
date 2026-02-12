@@ -44,7 +44,7 @@ public class AdminRoomBookingController {
     public List<Map<String, Object>> list(@RequestParam(value = "status", required = false) String status) {
         List<RoomBookingRequest> list = status == null ?
                 requestRepo.findAll() :
-                requestRepo.findByStatus(RoomBookingStatus.valueOf(status));
+                requestRepo.findByStatusOrderByRequestedAtDesc(RoomBookingStatus.valueOf(status));
         return list.stream().map(r -> {
             Map<String, Object> m = new HashMap<>();
             m.put("id", r.getId());

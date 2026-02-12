@@ -5,8 +5,14 @@ import { useAuth } from '../lib/AuthContext'
 export default function RoomBooking() {
   const { hasRole } = useAuth()
   const isFaculty = hasRole('FACULTY')
+  
+  // Original state
   const [rooms, setRooms] = useState([])
+  const [roomsLoading, setRoomsLoading] = useState(false)
+  const [roomsError, setRoomsError] = useState('')
   const [events, setEvents] = useState([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventsError, setEventsError] = useState('')
   const [eventId, setEventId] = useState('')
   const [pref1, setPref1] = useState('')
   const [pref2, setPref2] = useState('')
@@ -18,10 +24,58 @@ export default function RoomBooking() {
   const [meetingEnd, setMeetingEnd] = useState('')
   const [meetingPurpose, setMeetingPurpose] = useState('')
   const [roomConflicts, setRoomConflicts] = useState([])
+  const [roomWindowAvailability, setRoomWindowAvailability] = useState({})
+  const [roomWindowLoading, setRoomWindowLoading] = useState(false)
+  
+  // Fixed time slots for meeting mode
+  const timeSlots = [
+    '09:00-09:50', '09:50-10:40', '10:40-11:30', '11:30-12:20',
+    '12:20-13:10', '13:10-14:00', '14:00-14:50', '14:50-15:40',
+    '15:40-16:30', '16:30-17:20', '17:20-18:10'
+  ]
+  const [useFixedSlotsForMeeting, setUseFixedSlotsForMeeting] = useState(true)
+  const [meetingDate, setMeetingDate] = useState('')
+  const [selectedSlots, setSelectedSlots] = useState([])
+  const [fixedSlotAvailability, setFixedSlotAvailability] = useState([])
+  const [fixedSlotLoading, setFixedSlotLoading] = useState(false)
+  const [slotWindowAvailability, setSlotWindowAvailability] = useState({})
+
+  const loadBaseData = async () => {
+    setRoomsLoading(true)
+    setEventsLoading(true)
+    setRoomsError('')
+    setEventsError('')
+    try {
+      const [roomsRes, eventsRes] = await Promise.allSettled([
+        api.get('/api/rooms'),
+        api.get('/api/events/mine')
+      ])
+
+      if (roomsRes.status === 'fulfilled') {
+        setRooms(roomsRes.value.data || [])
+      } else {
+        setRooms([])
+        const data = roomsRes.reason?.response?.data
+        const msg = (data && (data.error || data.message)) ? (data.error || data.message) : (roomsRes.reason?.message || 'Failed to load rooms')
+        setRoomsError(String(msg))
+      }
+
+      if (eventsRes.status === 'fulfilled') {
+        setEvents(eventsRes.value.data || [])
+      } else {
+        setEvents([])
+        const data = eventsRes.reason?.response?.data
+        const msg = (data && (data.error || data.message)) ? (data.error || data.message) : (eventsRes.reason?.message || 'Failed to load events')
+        setEventsError(String(msg))
+      }
+    } finally {
+      setRoomsLoading(false)
+      setEventsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    api.get('/api/rooms').then(res => setRooms(res.data || [])).catch(() => setRooms([]))
-    api.get('/api/events/mine').then(res => setEvents(res.data || [])).catch(() => setEvents([]))
+    loadBaseData()
   }, [])
 
   const refreshAvailabilityForEvent = (evId) => {
@@ -30,21 +84,169 @@ export default function RoomBooking() {
     const start = ev.startTime
     const end = ev.endTime
     if (!start || !end) return
-    // Refresh room list (availability per-room can be checked on demand)
-    api.get('/api/rooms')
-      .then(res => setRooms(res.data || []))
-      .catch(() => {})
+    loadWindowAvailability(start, end)
   }
+
+  const toLocalDateTimeSeconds = (v) => {
+    if (!v) return ''
+    const s = String(v)
+    if (s.length >= 19) return s.slice(0, 19)
+    if (s.length === 16) return `${s}:00`
+    return s
+  }
+
+  const toLocalIsoNoSeconds = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return ''
+    return `${dateStr}T${timeStr}:00`
+  }
+
+  const areSlotsConsecutive = (slots) => {
+    if (slots.length <= 1) return true
+    const sorted = [...slots].sort((a, b) => timeSlots.indexOf(a) - timeSlots.indexOf(b))
+    for (let i = 1; i < sorted.length; i++) {
+      const prevIdx = timeSlots.indexOf(sorted[i - 1])
+      const currIdx = timeSlots.indexOf(sorted[i])
+      if (currIdx !== prevIdx + 1) return false
+    }
+    return true
+  }
+
+  const fetchFixedSlotAvailability = async (roomId, dateStr) => {
+    if (!roomId || !dateStr) return
+    try {
+      setFixedSlotLoading(true)
+      const res = await api.get(`/api/room-management/rooms/${roomId}/availability`, {
+        params: { date: dateStr }
+      })
+      setFixedSlotAvailability(res.data?.availableSlots || [])
+    } catch (e) {
+      setFixedSlotAvailability([])
+    } finally {
+      setFixedSlotLoading(false)
+    }
+  }
+
+  const fetchSlotWindowAvailability = async (roomId, dateStr) => {
+    if (!roomId || !dateStr) return
+    try {
+      const checks = timeSlots.map(async (slot) => {
+        const [startStr, endStr] = slot.split('-')
+        const start = toLocalIsoNoSeconds(dateStr, startStr)
+        const end = toLocalIsoNoSeconds(dateStr, endStr)
+        const res = await api.get(`/api/rooms/${roomId}/availability`, { params: { start, end } })
+        const ok = !!(res.data && (res.data.available === true || res.data.available === 'true'))
+        return [slot, ok]
+      })
+      const settled = await Promise.allSettled(checks)
+      const map = {}
+      settled.forEach((r) => {
+        if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+          map[r.value[0]] = r.value[1]
+        }
+      })
+      setSlotWindowAvailability(map)
+    } catch {
+      setSlotWindowAvailability({})
+    }
+  }
+
+  useEffect(() => {
+    const roomId = Number(pref1)
+    if (!roomId) {
+      setFixedSlotAvailability([])
+      setSelectedSlots([])
+      setSlotWindowAvailability({})
+      return
+    }
+
+    if (mode === 'meeting') {
+      if (!useFixedSlotsForMeeting) return
+      if (!meetingDate) {
+        setFixedSlotAvailability([])
+        setSelectedSlots([])
+        setSlotWindowAvailability({})
+        return
+      }
+      fetchFixedSlotAvailability(roomId, meetingDate)
+      fetchSlotWindowAvailability(roomId, meetingDate)
+      return
+    }
+
+    const ev = events.find(e => e.id === Number(eventId))
+    const evDate = ev?.startTime ? String(ev.startTime).slice(0, 10) : ''
+    if (!evDate) {
+      setFixedSlotAvailability([])
+      setSelectedSlots([])
+      setSlotWindowAvailability({})
+      return
+    }
+    fetchFixedSlotAvailability(roomId, evDate)
+  }, [pref1, mode, eventId, meetingDate, useFixedSlotsForMeeting, events])
+
+  useEffect(() => {
+    if (mode !== 'meeting') return
+    if (!useFixedSlotsForMeeting) return
+    if (!meetingDate || selectedSlots.length === 0) {
+      setMeetingStart('')
+      setMeetingEnd('')
+      return
+    }
+
+    const sorted = [...selectedSlots].sort((a, b) => timeSlots.indexOf(a) - timeSlots.indexOf(b))
+    const [startStr] = sorted[0].split('-')
+    const [, endStr] = sorted[sorted.length - 1].split('-')
+    setMeetingStart(toLocalIsoNoSeconds(meetingDate, startStr))
+    setMeetingEnd(toLocalIsoNoSeconds(meetingDate, endStr))
+  }, [mode, useFixedSlotsForMeeting, meetingDate, selectedSlots])
 
   const refreshAvailabilityForMeeting = () => {
     if (!meetingStart || !meetingEnd) return
-    const start = new Date(meetingStart).toISOString().slice(0,19)
-    const end = new Date(meetingEnd).toISOString().slice(0,19)
-    // Refresh room list (availability per-room can be checked on demand)
-    api.get('/api/rooms')
-      .then(res => setRooms(res.data || []))
-      .catch(() => {})
+    const start = toLocalDateTimeSeconds(meetingStart)
+    const end = toLocalDateTimeSeconds(meetingEnd)
+    loadWindowAvailability(start, end)
   }
+
+  const loadWindowAvailability = async (start, end) => {
+    if (!start || !end) return
+    try {
+      setRoomWindowLoading(true)
+      const res = await api.get('/api/rooms/availability', { params: { start, end } })
+      const map = {}
+      ;(res.data || []).forEach(x => {
+        if (x && (x.roomId != null)) map[Number(x.roomId)] = !!x.available
+      })
+      setRoomWindowAvailability(map)
+    } catch {
+      setRoomWindowAvailability({})
+    } finally {
+      setRoomWindowLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const shouldUseWindow =
+      (mode === 'event') ||
+      (mode === 'meeting' && !useFixedSlotsForMeeting)
+
+    if (!shouldUseWindow) {
+      setRoomWindowAvailability({})
+      return
+    }
+
+    if (mode === 'event') {
+      const ev = events.find(e => e.id === Number(eventId))
+      if (ev?.startTime && ev?.endTime) {
+        loadWindowAvailability(ev.startTime, ev.endTime)
+      }
+      return
+    }
+
+    if (meetingStart && meetingEnd) {
+      const start = toLocalDateTimeSeconds(meetingStart)
+      const end = toLocalDateTimeSeconds(meetingEnd)
+      loadWindowAvailability(start, end)
+    }
+  }, [mode, eventId, meetingStart, meetingEnd, events, useFixedSlotsForMeeting])
 
   const loadRoomConflicts = (roomId) => {
     let start, end
@@ -55,8 +257,8 @@ export default function RoomBooking() {
       end = ev.endTime
     } else {
       if (!meetingStart || !meetingEnd) return
-      start = new Date(meetingStart).toISOString().slice(0,19)
-      end = new Date(meetingEnd).toISOString().slice(0,19)
+      start = toLocalDateTimeSeconds(meetingStart)
+      end = toLocalDateTimeSeconds(meetingEnd)
     }
     api.get(`/api/rooms/${roomId}/availability`, { params: { start, end } })
       .then(res => {
@@ -91,8 +293,8 @@ export default function RoomBooking() {
           if (!meetingStart || !meetingEnd || !meetingPurpose) { setMessage('Please provide meeting start, end, and purpose'); return }
           payload = {
             roomId: Number(pref1),
-            start: new Date(meetingStart).toISOString().slice(0,19),
-            end: new Date(meetingEnd).toISOString().slice(0,19),
+            start: toLocalDateTimeSeconds(meetingStart),
+            end: toLocalDateTimeSeconds(meetingEnd),
             purpose: meetingPurpose
           }
         }
@@ -106,36 +308,54 @@ export default function RoomBooking() {
           setMessage('Booking failed')
         }
       } else {
-        if (!pref1 || !pref2 || !pref3) {
-          setMessage('Please select three room preferences')
-          return
-        }
-        if (new Set([pref1, pref2, pref3]).size < 3) {
-          setMessage('Please select three different rooms')
-          return
-        }
-        const payload = {
-          pref1RoomId: Number(pref1),
-          pref2RoomId: Number(pref2),
-          pref3RoomId: Number(pref3)
-        }
         if (mode === 'event') {
+          if (!pref1 || !pref2 || !pref3) {
+            setMessage('Please select three room preferences')
+            return
+          }
+          if (new Set([pref1, pref2, pref3]).size < 3) {
+            setMessage('Please select three different rooms')
+            return
+          }
           if (!eventId) { setMessage('Please select an event'); return }
-          payload.eventId = Number(eventId)
+
+          const payload = {
+            pref1RoomId: Number(pref1),
+            pref2RoomId: Number(pref2),
+            pref3RoomId: Number(pref3),
+            eventId: Number(eventId)
+          }
+          const res = await api.post('/api/room-requests', payload)
+          if (res.status === 200) {
+            setMessage('Request submitted. Admin approval pending. Official confirmation 2 days before the event/meeting.')
+            setEventId(''); setPref1(''); setPref2(''); setPref3('')
+            setMeetingStart(''); setMeetingEnd(''); setMeetingPurpose('')
+            setRoomConflicts([])
+          } else {
+            setMessage('Request failed')
+          }
         } else {
+          if (!pref1) {
+            setMessage('Please select a room')
+            return
+          }
           if (!meetingStart || !meetingEnd || !meetingPurpose) { setMessage('Please provide meeting start, end, and purpose'); return }
-          payload.meetingStart = new Date(meetingStart).toISOString().slice(0,19)
-          payload.meetingEnd = new Date(meetingEnd).toISOString().slice(0,19)
-          payload.meetingPurpose = meetingPurpose
-        }
-        const res = await api.post('/api/room-requests', payload)
-        if (res.status === 200) {
-          setMessage('Request submitted. Admin approval pending. Official confirmation 2 days before the event/meeting.')
-          setEventId(''); setPref1(''); setPref2(''); setPref3('')
-          setMeetingStart(''); setMeetingEnd(''); setMeetingPurpose('')
-          setRoomConflicts([])
-        } else {
-          setMessage('Request failed')
+
+          const payload = {
+            roomId: Number(pref1),
+            purpose: meetingPurpose,
+            meetingStart: toLocalDateTimeSeconds(meetingStart),
+            meetingEnd: toLocalDateTimeSeconds(meetingEnd)
+          }
+          const res = await api.post('/api/room-requests/meeting', payload)
+          if (res.status === 200) {
+            setMessage('Request submitted. Admin approval pending. Official confirmation 2 days before the event/meeting.')
+            setEventId(''); setPref1(''); setPref2(''); setPref3('')
+            setMeetingStart(''); setMeetingEnd(''); setMeetingPurpose('')
+            setRoomConflicts([])
+          } else {
+            setMessage('Request failed')
+          }
         }
       }
     } catch (err) {
@@ -144,11 +364,19 @@ export default function RoomBooking() {
         : (typeof data === 'string' ? data : err.message)
       setMessage('Booking failed: ' + detail)
     } finally {
+      if (mode === 'meeting' && useFixedSlotsForMeeting && Number(pref1) > 0 && meetingDate) {
+        fetchFixedSlotAvailability(Number(pref1), meetingDate)
+      }
       setLoading(false)
     }
   }
 
   const selectedRoomInfo = rooms.find(room => room.id === Number(pref1))
+
+  const isErrorMessage = (m) => {
+    if (!m) return false
+    return /(failed|error|not available|please select|invalid)/i.test(String(m))
+  }
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -173,6 +401,28 @@ export default function RoomBooking() {
             </div>
             
             <form onSubmit={onSubmit} className="space-y-6">
+              {(roomsError || eventsError) && (
+                <div className="alert alert-error">
+                  <div className="space-y-1">
+                    {roomsError && <div><strong>Rooms:</strong> {roomsError}</div>}
+                    {eventsError && <div><strong>Events:</strong> {eventsError}</div>}
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary mt-2"
+                      onClick={() => loadBaseData()}
+                      disabled={roomsLoading || eventsLoading}
+                    >
+                      {roomsLoading || eventsLoading ? 'Reloading…' : 'Reload data'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {mode === 'event' && (!eventId || !Number(pref1)) && (
+                <div className="text-xs text-gray-500">
+                  Select an event and a room to see fixed-slot availability.
+                </div>
+              )}
+
               {mode === 'event' ? (
                 <div className="form-group">
                   <label className="form-label">Select Event</label>
@@ -195,6 +445,53 @@ export default function RoomBooking() {
                 </div>
               ) : (
                 <>
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useFixedSlotsForMeeting}
+                        onChange={(e) => {
+                          const checked = e.target.checked
+                          setUseFixedSlotsForMeeting(checked)
+                          setMessage('')
+                          setSelectedSlots([])
+                          setFixedSlotAvailability([])
+                          if (!checked) {
+                            setMeetingDate('')
+                            setMeetingStart('')
+                            setMeetingEnd('')
+                          }
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="font-medium text-blue-800">Use fixed daily time slots (based on weekly class schedule)</span>
+                    </label>
+                  </div>
+
+                  {useFixedSlotsForMeeting && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="form-group">
+                        <label className="form-label">Meeting Date</label>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={meetingDate}
+                          onChange={e => { setMeetingDate(e.target.value); setMessage(''); setSelectedSlots([]) }}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Selected Slots</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={selectedSlots.length ? selectedSlots.join(', ') : ''}
+                          readOnly
+                          placeholder="Select up to 3 consecutive slots"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="form-group">
                       <label className="form-label">Meeting Start</label>
@@ -204,6 +501,7 @@ export default function RoomBooking() {
                         value={meetingStart}
                         onChange={e => { setMeetingStart(e.target.value); setMessage(''); }}
                         onBlur={refreshAvailabilityForMeeting}
+                        disabled={useFixedSlotsForMeeting}
                       />
                     </div>
                     <div className="form-group">
@@ -214,9 +512,65 @@ export default function RoomBooking() {
                         value={meetingEnd}
                         onChange={e => { setMeetingEnd(e.target.value); setMessage(''); }}
                         onBlur={refreshAvailabilityForMeeting}
+                        disabled={useFixedSlotsForMeeting}
                       />
                     </div>
                   </div>
+
+                  {useFixedSlotsForMeeting && Number(pref1) > 0 && meetingDate && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">Select up to 3 consecutive slots</div>
+                        <div className="text-sm text-gray-600">
+                          {fixedSlotLoading ? 'Checking availability…' : ''}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {timeSlots.map(slot => {
+                          const fixedOk = fixedSlotAvailability.includes(slot)
+                          const windowOk = slotWindowAvailability[slot]
+                          const hasWindow = Object.keys(slotWindowAvailability).length > 0
+                          const isAvailable = fixedOk && (hasWindow ? windowOk !== false : true)
+                          const isSelected = selectedSlots.includes(slot)
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              disabled={!isAvailable}
+                              onClick={() => {
+                                if (!isAvailable) return
+                                setMessage('')
+                                setSelectedSlots(prev => {
+                                  const next = prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot]
+                                  if (next.length > 3) return prev
+                                  if (!areSlotsConsecutive(next)) return prev
+                                  return next
+                                })
+                              }}
+                              className="p-2 rounded text-sm border"
+                              style={{
+                                backgroundColor: isSelected ? '#2563eb' : isAvailable ? '#dcfce7' : '#fee2e2',
+                                borderColor: isSelected ? '#1d4ed8' : isAvailable ? '#86efac' : '#fecaca',
+                                color: isSelected ? '#ffffff' : isAvailable ? '#166534' : '#991b1b',
+                                cursor: isAvailable ? 'pointer' : 'not-allowed',
+                                opacity: isAvailable ? 1 : 0.65
+                              }}
+                            >
+                              <div className="font-medium">{slot}</div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Green: available
+                        {' '}
+                        Red: occupied by class/booking
+                        {' '}
+                        Blue: selected
+                      </div>
+                    </div>
+                  )}
+
                   <div className="form-group">
                     <label className="form-label">Meeting Purpose</label>
                     <textarea
@@ -230,9 +584,9 @@ export default function RoomBooking() {
                 </>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className={`grid grid-cols-1 ${isFaculty || mode === 'meeting' ? 'md:grid-cols-1' : 'md:grid-cols-3'} gap-4`}>
                 <div className="form-group">
-                  <label className="form-label">Preference 1</label>
+                  <label className="form-label">{isFaculty ? 'Select Room' : 'Preference 1'}</label>
                   <select
                     className="form-select"
                     value={pref1}
@@ -245,62 +599,133 @@ export default function RoomBooking() {
                     required
                   >
                     <option value="">Choose a room...</option>
-                    {rooms.map(room => (
-                      <option key={room.id} value={room.id}>{room.name} - {room.location} (Capacity: {room.capacity})</option>
-                    ))}
+                    {rooms.map(room => {
+                      const ok = roomWindowAvailability[Number(room.id)]
+                      const hasWindow = Object.keys(roomWindowAvailability).length > 0
+                      const disabled = hasWindow ? !ok : false
+                      return (
+                        <option key={room.id} value={room.id} disabled={disabled}>
+                          {room.name}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
+                          {hasWindow ? (ok ? ' — AVAILABLE' : ' — OCCUPIED') : ''}
+                        </option>
+                      )
+                    })}
                   </select>
+                  {rooms.length === 0 && !roomsLoading && !roomsError && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      No rooms loaded. Use “Reload data” above or check backend is running.
+                    </div>
+                  )}
+                  {roomWindowLoading && (
+                    <div className="text-xs text-gray-500 mt-1">Checking availability…</div>
+                  )}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Preference 2</label>
-                  <select className="form-select" value={pref2} onChange={(e)=>setPref2(e.target.value)} required>
-                    <option value="">Choose a room...</option>
-                    {rooms.map(room => (
-                      <option key={room.id} value={room.id}>{room.name} - {room.location} (Capacity: {room.capacity})</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Preference 3</label>
-                  <select className="form-select" value={pref3} onChange={(e)=>setPref3(e.target.value)} required>
-                    <option value="">Choose a room...</option>
-                    {rooms.map(room => (
-                      <option key={room.id} value={room.id}>{room.name} - {room.location} (Capacity: {room.capacity})</option>
-                    ))}
-                  </select>
-                </div>
+
+                {!isFaculty && mode === 'event' && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Preference 2</label>
+                      <select
+                        className="form-select"
+                        value={pref2}
+                        onChange={(e)=>setPref2(e.target.value)}
+                        required
+                      >
+                        <option value="">Choose a room...</option>
+                        {rooms.map(room => {
+                          const ok = roomWindowAvailability[Number(room.id)]
+                          const hasWindow = Object.keys(roomWindowAvailability).length > 0
+                          const disabled = hasWindow ? !ok : false
+                          return (
+                            <option key={room.id} value={room.id} disabled={disabled}>
+                              {room.name}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
+                              {hasWindow ? (ok ? ' — AVAILABLE' : ' — OCCUPIED') : ''}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Preference 3</label>
+                      <select
+                        className="form-select"
+                        value={pref3}
+                        onChange={(e)=>setPref3(e.target.value)}
+                        required
+                      >
+                        <option value="">Choose a room...</option>
+                        {rooms.map(room => {
+                          const ok = roomWindowAvailability[Number(room.id)]
+                          const hasWindow = Object.keys(roomWindowAvailability).length > 0
+                          const disabled = hasWindow ? !ok : false
+                          return (
+                            <option key={room.id} value={room.id} disabled={disabled}>
+                              {room.name}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
+                              {hasWindow ? (ok ? ' — AVAILABLE' : ' — OCCUPIED') : ''}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
+                  </>
+                )}
               </div>
 
-              {selectedRoomInfo && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-blue-900 mb-2">Room Details</h3>
-                  <div className="text-sm text-blue-800 space-y-1">
-                    <div><strong>Name:</strong> {selectedRoomInfo.name}</div>
-                    <div><strong>Location:</strong> {selectedRoomInfo.location}</div>
-                    <div><strong>Capacity:</strong> {selectedRoomInfo.capacity} people</div>
+              {mode === 'event' && Number(pref1) > 0 && eventId && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-600">Fixed-slot availability (from weekly class timetable)</div>
+                    <div className="text-sm text-gray-600">
+                      {fixedSlotLoading ? 'Checking availability…' : ''}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {timeSlots.map(slot => {
+                      const isAvailable = fixedSlotAvailability.includes(slot)
+                      return (
+                        <div
+                          key={slot}
+                          className="p-2 rounded text-sm border"
+                          style={{
+                            backgroundColor: isAvailable ? '#dcfce7' : '#fee2e2',
+                            borderColor: isAvailable ? '#86efac' : '#fecaca',
+                            color: isAvailable ? '#166534' : '#991b1b'
+                          }}
+                        >
+                          <div className="font-medium">{slot}</div>
+                          <div className="text-xs">{isAvailable ? 'Available' : 'Occupied'}</div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
 
+              {/* Message Display */}
               {message && (
-                <div className={`alert ${message.includes('successful') ? 'alert-success' : 'alert-error'}`}>
+                <div className={`alert ${isErrorMessage(message) ? 'alert-error' : 'alert-success'}`}>
                   {message}
                 </div>
               )}
 
-              <button
-                type="submit"
-                className="btn btn-primary w-full"
-                disabled={loading}
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <div className="spinner mr-2"></div>
-                    Submitting Request...
-                  </div>
-                ) : (
-                  'Submit Request'
-                )}
-              </button>
+              {/* Submit Button */}
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="spinner mr-2"></div>
+                      Submitting Request...
+                    </div>
+                  ) : (
+                    'Submit Request'
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -363,21 +788,44 @@ export default function RoomBooking() {
           <div className="card mt-6">
             <h3 className="text-lg font-semibold mb-4">Booking Guidelines</h3>
             <div className="text-sm text-gray-600 space-y-2">
+              {mode === 'event' ? (
+                <>
+                  <div className="flex items-start">
+                    <span className="mr-2">⏰</span>
+                    <span><strong>Event Booking:</strong> Minimum 5 days advance notice required</span>
+                  </div>
+                  <div className="flex items-start">
+                    <span className="mr-2">📅</span>
+                    <span>Official confirmation will be sent 2 days before the event</span>
+                  </div>
+                  <div className="flex items-start">
+                    <span className="mr-2">⚠️</span>
+                    <span>Admin approval required for all event room bookings</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-start">
+                    <span className="mr-2">🚀</span>
+                    <span><strong>Meeting Booking:</strong> Can be booked for same day</span>
+                  </div>
+                  <div className="flex items-start">
+                    <span className="mr-2">✅</span>
+                    <span>Faculty: Immediate approval without admin processing</span>
+                  </div>
+                  <div className="flex items-start">
+                    <span className="mr-2">⏳</span>
+                    <span>Club Associates: Admin approval required</span>
+                  </div>
+                </>
+              )}
               <div className="flex items-start">
-                <span className="mr-2">⏰</span>
-                <span>Minimum 5 days advance notice required before event date</span>
+                <span className="mr-2">👥</span>
+                <span>{isFaculty ? 'Faculty: Select 1 room (immediate approval)' : 'Club Associates: Select 3 room preferences (admin approval)'}</span>
               </div>
               <div className="flex items-start">
-                <span className="mr-2">🕐</span>
-                <span>Select three room preferences ranked by priority</span>
-              </div>
-              <div className="flex items-start">
-                <span className="mr-2">📅</span>
-                <span>Official confirmation will be sent 2 days before the event</span>
-              </div>
-              <div className="flex items-start">
-                <span className="mr-2">⚠️</span>
-                <span>Admin approval is required for all room booking requests</span>
+                <span className="mr-2">🏛️</span>
+                <span>Only Faculty, Club Associates, and Admin can book rooms</span>
               </div>
             </div>
           </div>

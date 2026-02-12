@@ -33,8 +33,10 @@ public class RoomController {
             Map<String, Object> m = new HashMap<>();
             m.put("id", r.getId());
             m.put("name", r.getName());
-            m.put("location", r.getLocation());
+            m.put("roomNumber", r.getRoomNumber());
+            m.put("type", r.getType());
             m.put("capacity", r.getCapacity());
+            m.put("amenities", r.getAmenities());
             return m;
         }).collect(Collectors.toList());
     }

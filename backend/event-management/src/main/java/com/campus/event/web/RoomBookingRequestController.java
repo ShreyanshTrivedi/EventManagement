@@ -8,7 +8,6 @@ import com.campus.event.repository.EventRepository;
 import com.campus.event.repository.RoomBookingRequestRepository;
 import com.campus.event.repository.RoomRepository;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,6 +42,14 @@ public class RoomBookingRequestController {
         public LocalDateTime meetingStart;
         public LocalDateTime meetingEnd;
         public String meetingPurpose;
+    }
+
+    public static class SimpleBookingRequest {
+        public Long roomId;
+        public String date;
+        public String purpose;
+        public LocalDateTime meetingStart;
+        public LocalDateTime meetingEnd;
     }
 
     @PostMapping
@@ -94,11 +101,47 @@ public class RoomBookingRequestController {
         return ResponseEntity.ok(Map.of("id", saved.getId(), "status", saved.getStatus().name()));
     }
 
+    @PostMapping("/meeting")
+    @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE')")
+    public ResponseEntity<?> createSimpleMeeting(@Valid @RequestBody SimpleBookingRequest req, @AuthenticationPrincipal UserDetails principal) {
+        if (req.roomId == null || req.meetingStart == null || req.meetingEnd == null || req.purpose == null) {
+            return ResponseEntity.badRequest().body("roomId, meetingStart, meetingEnd, and purpose are required");
+        }
+
+        if (!req.meetingEnd.isAfter(req.meetingStart)) {
+            return ResponseEntity.badRequest().body("meetingEnd must be after meetingStart");
+        }
+
+        // Check advance booking requirement
+        long days = java.time.Duration.between(java.time.LocalDateTime.now(), req.meetingStart).toDays();
+        if (days < 1) {
+            return ResponseEntity.badRequest().body("Meeting bookings must be at least 1 day in advance");
+        }
+
+        Room room = roomRepo.findById(req.roomId).orElse(null);
+        if (room == null) {
+            return ResponseEntity.badRequest().body("Room not found");
+        }
+
+        RoomBookingRequest bookingRequest = new RoomBookingRequest();
+        bookingRequest.setMeetingStart(req.meetingStart);
+        bookingRequest.setMeetingEnd(req.meetingEnd);
+        bookingRequest.setMeetingPurpose(req.purpose);
+        bookingRequest.setPref1(room);
+        bookingRequest.setPref2(room);
+        bookingRequest.setPref3(room);
+        bookingRequest.setStatus(RoomBookingStatus.PENDING);
+        bookingRequest.setRequestedByUsername(principal.getUsername());
+        
+        RoomBookingRequest saved = requestRepo.save(bookingRequest);
+        return ResponseEntity.ok(Map.of("id", saved.getId(), "status", saved.getStatus().name()));
+    }
+
     @GetMapping("/mine")
     @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE')")
     @Transactional(readOnly = true)
     public List<Map<String, Object>> mine(@AuthenticationPrincipal UserDetails principal) {
-        return requestRepo.findByRequestedByUsername(principal.getUsername())
+        return requestRepo.findByRequestedByUsernameOrderByRequestedAtDesc(principal.getUsername())
                 .stream()
                 .map(r -> {
                     java.util.HashMap<String, Object> m = new java.util.HashMap<>();

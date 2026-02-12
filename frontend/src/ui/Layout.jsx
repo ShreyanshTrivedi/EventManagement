@@ -52,8 +52,8 @@ export default function Layout({ children }) {
                     Bookings
                   </Link>
                   <Link 
-                    to="/book-room" 
-                    className={`nav-link ${isActive('/book-room') ? 'active' : ''}`}
+                    to="/enhanced-book-room" 
+                    className={`nav-link ${isActive('/enhanced-book-room') ? 'active' : ''}`}
                   >
                     Book Room
                   </Link>

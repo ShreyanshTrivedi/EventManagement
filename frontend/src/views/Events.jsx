@@ -65,8 +65,9 @@ export default function Events() {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Campus Events</h1>
         <p className="text-gray-600">Discover and register for upcoming events</p>
         {(hasRole('ADMIN') || hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE')) && (
-          <div className="mt-4">
+          <div className="mt-4 space-x-2">
             <Link to="/events/create" className="btn btn-primary">Create Event</Link>
+            <Link to="/events/create-enhanced" className="btn btn-secondary">Create Event with Room</Link>
           </div>
         )}
       </div>

@@ -7,11 +7,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
 @Repository
-public interface RoomRepository extends JpaRepository<Room, Long> {
+public interface EnhancedRoomRepository extends JpaRepository<Room, Long> {
     List<Room> findByFloorIdOrderByRoomNumberAsc(Long floorId);
     List<Room> findByFloorIdAndIsActiveTrueOrderByRoomNumberAsc(Long floorId);
     
@@ -36,5 +37,3 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
                                     @Param("startTime") LocalTime startTime, 
                                     @Param("endTime") LocalTime endTime);
 }
-
-
