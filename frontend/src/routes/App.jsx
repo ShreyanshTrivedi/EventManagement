@@ -15,6 +15,8 @@ import AdminRoleRequests from '../views/AdminRoleRequests'
 import CreateEvent from '../views/CreateEvent'
 import EventEdit from '../views/EventEdit'
 import AdminRoomApprovals from '../views/AdminRoomApprovals'
+import AdminBroadcast from '../views/AdminBroadcast'
+import StyleGuide from '../views/StyleGuide'
 
 export default function App() {
   return (
@@ -34,6 +36,8 @@ export default function App() {
           <Route path="/enhanced-book-room" element={<ProtectedRoute roles={['FACULTY','CLUB_ASSOCIATE','ADMIN']}><RoomBooking /></ProtectedRoute>} />
           <Route path="/admin/role-requests" element={<ProtectedRoute roles={['ADMIN']}><AdminRoleRequests /></ProtectedRoute>} />
           <Route path="/admin/room-approvals" element={<ProtectedRoute roles={['ADMIN']}><AdminRoomApprovals /></ProtectedRoute>} />
+          <Route path="/admin/notifications" element={<ProtectedRoute roles={[ 'ADMIN' ]}><AdminBroadcast /></ProtectedRoute>} />
+          <Route path="/style-guide" element={<StyleGuide />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

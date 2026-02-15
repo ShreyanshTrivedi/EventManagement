@@ -67,6 +67,11 @@ public class RegistrationController {
                 }
             }
 
+            // creators cannot register for their own events (covers missing clubId cases)
+            if (event.getCreatedBy() != null && user != null && event.getCreatedBy().getUsername().equals(user.getUsername())) {
+                return ResponseEntity.status(403).body("Event creators cannot register for their own events");
+            }
+
             // Always register using the authenticated user's account email so that
             // /api/registrations/mine (which looks up by user.email) will include this registration.
             String effectiveEmail = user.getEmail();

@@ -78,8 +78,10 @@ public class RoomBookingRequestController {
             if (!req.meetingEnd.isAfter(req.meetingStart)) {
                 return ResponseEntity.badRequest().body("meetingEnd must be after meetingStart");
             }
-            long days = Duration.between(LocalDateTime.now(), req.meetingStart).toDays();
-            if (days < 1) return ResponseEntity.badRequest().body("Meeting bookings must be at least 1 day in advance");
+            // server-side cutoff: meetingStart must be strictly in the future (reject past/start-now bookings)
+            if (!req.meetingStart.isAfter(LocalDateTime.now())) {
+                return ResponseEntity.badRequest().body("meetingStart must be in the future");
+            }
         }
 
         Room r1 = roomRepo.findById(req.pref1RoomId).orElse(null);
@@ -112,10 +114,9 @@ public class RoomBookingRequestController {
             return ResponseEntity.badRequest().body("meetingEnd must be after meetingStart");
         }
 
-        // Check advance booking requirement
-        long days = java.time.Duration.between(java.time.LocalDateTime.now(), req.meetingStart).toDays();
-        if (days < 1) {
-            return ResponseEntity.badRequest().body("Meeting bookings must be at least 1 day in advance");
+        // Server-side cutoff: meetingStart must be strictly in the future (client allows same-day fixed-slot bookings)
+        if (!req.meetingStart.isAfter(java.time.LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body("meetingStart must be in the future");
         }
 
         Room room = roomRepo.findById(req.roomId).orElse(null);

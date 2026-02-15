@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../lib/api'
+import { showToast } from '../lib/toast'
+import EventNotificationsPanel from './EventNotificationsPanel'
+import { useAuth } from '../lib/AuthContext'
 
 export default function EventRegistration() {
   const { eventId } = useParams()
@@ -12,6 +15,9 @@ export default function EventRegistration() {
   const [loading, setLoading] = useState(false)
   const [event, setEvent] = useState(null)
   const [closed, setClosed] = useState(false)
+  const [isRegistered, setIsRegistered] = useState(false)
+  const { user, hasRole } = useAuth()
+  const emailValid = email ? /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}$/.test(email.trim()) : true
 
   const isErrorMessage = (m) => {
     if (!m) return false
@@ -22,6 +28,14 @@ export default function EventRegistration() {
     api.get(`/api/public/events/${eventId}`)
       .then(res => setEvent(res.data))
       .catch(() => setEvent(null))
+  }, [eventId])
+
+  useEffect(() => {
+    // check if current user is registered for this event
+    api.get('/api/event-registrations/mine').then(res => {
+      const regs = res.data || []
+      setIsRegistered(regs.some(r => Number(r.eventId) === Number(eventId)))
+    }).catch(() => setIsRegistered(false))
   }, [eventId])
 
   const fields = useMemo(() => {
@@ -40,6 +54,12 @@ export default function EventRegistration() {
     }
   }, [event])
 
+  const isCreator = user && event && event.createdBy && user.sub === event.createdBy
+
+  const formattedDate = event && event.startTime ? new Date(event.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ''
+  const formattedTimeRange = event && event.startTime && event.endTime ? `${new Date(event.startTime).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})} — ${new Date(event.endTime).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}` : ''
+  const registrationDeadlineStr = event && event.startTime ? new Date(new Date(event.startTime).getTime() - 2 * 24 * 60 * 60 * 1000).toLocaleString() : ''
+
   const onSubmit = async (e) => {
     e.preventDefault()
     setMessage('')
@@ -56,11 +76,14 @@ export default function EventRegistration() {
       const body = { eventId: Number(eventId), email, fullName, answers }
       await api.post('/api/registrations', body)
       setMessage('Registration successful! You will receive a confirmation email shortly.')
+      showToast({ message: 'Registration successful', type: 'success' })
       setTimeout(() => {
         navigate('/events')
       }, 2000)
     } catch (err) {
-      setMessage('Registration failed: ' + (err.response?.data || err.message))
+      const m = 'Registration failed: ' + (err.response?.data || err.message)
+      setMessage(m)
+      showToast({ message: m, type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -103,17 +126,15 @@ export default function EventRegistration() {
             </div>
             
             <div className="space-y-2">
-              <div className="flex items-center text-sm text-slate-500">
+                <div className="flex items-center text-sm text-slate-500">
                 <span className="mr-2">📅</span>
-                <span>{new Date(event.startTime).toLocaleDateString()}</span>
+                <span>{formattedDate} • {formattedTimeRange}</span>
               </div>
-              <div className="flex items-center text-sm text-slate-500">
-                <span className="mr-2">🕐</span>
-                <span>
-                  {new Date(event.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                  {new Date(event.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </span>
-              </div>
+              {registrationDeadlineStr && (
+                <div className="flex items-center text-xs text-slate-400 mt-1">
+                  Registration deadline: {registrationDeadlineStr}
+                </div>
+              )}
               <div className="flex items-center text-sm text-slate-500">
                 <span className="mr-2">📍</span>
                 <span>{event.location || 'TBD'}</span>
@@ -129,6 +150,12 @@ export default function EventRegistration() {
           {closed && (
             <div className="alert alert-error mb-4">
               Registration is closed. Registrations are allowed only until 2 days before the event start.
+            </div>
+          )}
+
+          {isCreator && (
+            <div className="alert alert-error mb-4">
+              Event creators cannot register for their own events.
             </div>
           )}
           
@@ -156,7 +183,9 @@ export default function EventRegistration() {
                 pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}$"
                 title="Please enter a valid email address (example@domain.com)"
                 required
+                aria-invalid={!emailValid}
               />
+              {email && !emailValid && <div className="text-xs text-red-600 mt-1">Please enter a valid email address</div>}
             </div>
 
             {/* Dynamic Answers */}
@@ -168,7 +197,7 @@ export default function EventRegistration() {
             ))}
 
             {message && (
-              <div className={`alert ${isErrorMessage(message) ? 'alert-error' : 'alert-success'}`}>
+              <div className={`alert ${isErrorMessage(message) ? 'alert-error' : 'alert-success'}`} role={isErrorMessage(message) ? 'alert' : 'status'} aria-live={isErrorMessage(message) ? 'assertive' : 'polite'}>
                 {message}
               </div>
             )}
@@ -176,7 +205,7 @@ export default function EventRegistration() {
             <button
               type="submit"
               className="btn btn-primary w-full"
-              disabled={loading || closed}
+              disabled={loading || closed || isCreator}
             >
               {loading ? (
                 <div className="flex items-center justify-center">
@@ -200,6 +229,11 @@ export default function EventRegistration() {
           </div>
         </div>
       </div>
+
+      {/* Event notifications (only for registered users) */}
+      <EventNotificationsPanel eventId={eventId} canView={isRegistered} canPost={isCreator || hasRole('ADMIN')} />
+
     </div>
   )
 }
+

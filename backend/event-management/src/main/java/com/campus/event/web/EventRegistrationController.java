@@ -10,14 +10,18 @@ import com.campus.event.service.NotificationService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.stream.Collectors; 
 
 @RestController
 @RequestMapping("/api")
@@ -46,11 +50,44 @@ public class EventRegistrationController {
                                       @Valid @RequestBody(required = false) Map<String, Object> payload) {
         Event event = eventRepository.findById(eventId).orElse(null);
         if (event == null) return ResponseEntity.notFound().build();
+
+        // prevent duplicate
         if (registrationRepository.existsByEvent_IdAndUser_Username(eventId, principal.getUsername())) {
             return ResponseEntity.badRequest().body("Already registered");
         }
+
         User user = userRepository.findByUsername(principal.getUsername()).orElse(null);
         if (user == null) return ResponseEntity.status(401).build();
+
+        // role checks: Admins/Faculty cannot register
+        Set<String> roles = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toSet());
+        if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_FACULTY")) {
+            return ResponseEntity.status(403).body("Admins and Faculty cannot register for events");
+        }
+
+        // club associates cannot register for their own club events
+        if (roles.contains("ROLE_CLUB_ASSOCIATE") && user.getClubId() != null && event.getClubId() != null
+                && user.getClubId().equals(event.getClubId())) {
+            return ResponseEntity.status(403).body("Club Associates cannot register for their own club events");
+        }
+
+        // creators cannot register for their own events (covers missing clubId cases)
+        if (event.getCreatedBy() != null && user.getUsername() != null && event.getCreatedBy().getUsername().equals(user.getUsername())) {
+            return ResponseEntity.status(403).body("Event creators cannot register for their own events");
+        }
+
+        // registration deadline: closed 2 days before start and disallow past events
+        if (event.getStartTime() != null) {
+            if (event.getStartTime().isBefore(LocalDateTime.now().plusSeconds(1))) {
+                return ResponseEntity.status(403).body("Cannot register for past events");
+            }
+            if (LocalDateTime.now().isAfter(event.getStartTime().minusDays(2))) {
+                return ResponseEntity.status(403).body("Registration closed 2 days before event start");
+            }
+        }
+
         EventRegistration reg = new EventRegistration();
         reg.setEvent(event);
         reg.setUser(user);

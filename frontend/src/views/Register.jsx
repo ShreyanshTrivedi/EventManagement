@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../lib/api'
+import { showToast } from '../lib/toast'
 
 export default function Register() {
   const [username, setUsername] = useState('')
@@ -21,10 +22,12 @@ export default function Register() {
     const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}$/
     if (!emailPattern.test(email.trim())) {
       setError('Please enter a valid email address.')
+      showToast({ message: 'Please enter a valid email address', type: 'error' })
       return
     }
     if (password !== confirm) {
       setError('Passwords do not match.')
+      showToast({ message: 'Passwords do not match', type: 'error' })
       return
     }
     try {
@@ -33,11 +36,13 @@ export default function Register() {
       if (res.status === 200) {
         const msg = typeof res.data === 'string' ? res.data : 'Registration successful. You can now sign in.'
         setMessage(msg)
+        showToast({ message: 'Registration successful', type: 'success' })
         if (role === 'GENERAL_USER') {
           setTimeout(() => navigate('/login'), 800)
         }
       } else {
         setError('Registration failed. Please try again.')
+        showToast({ message: 'Registration failed', type: 'error' })
       }
     } catch (err) {
       if (err.response && err.response.data) setError(String(err.response.data))
@@ -51,7 +56,7 @@ export default function Register() {
     <div className="max-w-md mx-auto">
       <div className="card p-0 overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-br from-blue-50 to-white">
-          <div className="text-sm font-semibold text-blue-700">Campus Events</div>
+          <div className="text-sm font-semibold text-blue-700">EventSphere</div>
           <div className="mt-1 text-2xl font-bold text-slate-900">Create account</div>
           <div className="text-sm text-slate-600">General users are registered instantly. Other roles need admin approval.</div>
         </div>
@@ -95,8 +100,8 @@ export default function Register() {
             <input type="password" className="form-input" value={confirm} onChange={(e)=>setConfirm(e.target.value)} required />
           </div>
 
-            {error && <div className="alert alert-error">{error}</div>}
-            {message && <div className="alert alert-success">{message}</div>}
+            {error && <div className="alert alert-error" role="alert" aria-live="assertive">{error}</div>}
+            {message && <div className="alert alert-success" role="status" aria-live="polite">{message}</div>}
 
             <button type="submit" className="btn btn-primary w-full" disabled={loading}>
               {loading ? 'Creating account...' : 'Create Account'}

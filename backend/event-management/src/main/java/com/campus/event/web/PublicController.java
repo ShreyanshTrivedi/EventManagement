@@ -6,8 +6,7 @@ import com.campus.event.domain.RoomBookingRequest;
 import com.campus.event.domain.RoomBookingStatus;
 import com.campus.event.repository.EventRepository;
 import com.campus.event.repository.RoomBookingRequestRepository;
-import com.campus.event.repository.RoomRepository;
-import org.springframework.web.bind.annotation.GetMapping;
+import com.campus.event.repository.RoomRepository;import org.springframework.http.ResponseEntity;import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,44 +32,103 @@ public class PublicController {
     }
 
     @GetMapping("/events")
-    public List<java.util.Map<String, Object>> listPublicEvents() {
-        return eventRepository.findByIsPublicTrue().stream()
-                .map(e -> {
-                    java.util.HashMap<String, Object> m = new java.util.HashMap<>();
-                    m.put("id", e.getId());
-                    m.put("title", e.getTitle());
-                    m.put("description", e.getDescription());
-                    m.put("startTime", e.getStartTime());
-                    m.put("endTime", e.getEndTime());
-                    m.put("location", e.getLocation());
-                    m.put("clubId", e.getClubId());
-                    m.put("registrationSchema", e.getRegistrationSchema());
-                    m.put("isPublic", e.isPublic());
-                    return m;
-                })
-                .collect(java.util.stream.Collectors.toList());
+    public ResponseEntity<?> listPublicEvents() {
+        try {
+            java.util.List<java.util.Map<String, Object>> out = eventRepository.findByIsPublicTrue().stream()
+                    .map(e -> {
+                        java.util.HashMap<String, Object> m = new java.util.HashMap<>();
+                        m.put("id", e.getId());
+                        m.put("title", e.getTitle());
+                        m.put("description", e.getDescription());
+                        m.put("startTime", e.getStartTime());
+                        m.put("endTime", e.getEndTime());
+                        m.put("location", e.getLocation());
+                        m.put("clubId", e.getClubId());
+                        m.put("registrationSchema", e.getRegistrationSchema());
+                        m.put("isPublic", e.isPublic());
+                        m.put("createdBy", e.getCreatedBy() != null ? e.getCreatedBy().getUsername() : null);
+                        return m;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(out);
+        } catch (Exception ex) {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            ex.printStackTrace(new java.io.PrintWriter(sw));
+            java.util.Map<String, Object> body = java.util.Map.of(
+                    "error", ex.getMessage(),
+                    "trace", sw.toString()
+            );
+            return ResponseEntity.status(500).body(body);
+        }
     }
 
     @GetMapping("/events/{id}")
-    public java.util.Map<String, Object> getEvent(@org.springframework.web.bind.annotation.PathVariable Long id) {
-        Event e = eventRepository.findById(id).orElse(null);
-        if (e == null) return null;
-        java.util.HashMap<String, Object> m = new java.util.HashMap<>();
-        m.put("id", e.getId());
-        m.put("title", e.getTitle());
-        m.put("description", e.getDescription());
-        m.put("startTime", e.getStartTime());
-        m.put("endTime", e.getEndTime());
-        m.put("location", e.getLocation());
-        m.put("clubId", e.getClubId());
-        m.put("registrationSchema", e.getRegistrationSchema());
-        m.put("isPublic", e.isPublic());
-        return m;
+    public ResponseEntity<?> getEvent(@org.springframework.web.bind.annotation.PathVariable Long id) {
+        try {
+            Event e = eventRepository.findById(id).orElse(null);
+            if (e == null) return ResponseEntity.notFound().build();
+            java.util.HashMap<String, Object> m = new java.util.HashMap<>();
+            m.put("id", e.getId());
+            m.put("title", e.getTitle());
+            m.put("description", e.getDescription());
+            m.put("startTime", e.getStartTime());
+            m.put("endTime", e.getEndTime());
+            m.put("location", e.getLocation());
+            m.put("clubId", e.getClubId());
+            m.put("registrationSchema", e.getRegistrationSchema());
+            m.put("isPublic", e.isPublic());
+            m.put("createdBy", e.getCreatedBy() != null ? e.getCreatedBy().getUsername() : null);
+            return ResponseEntity.ok(m);
+        } catch (Exception ex) {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            ex.printStackTrace(new java.io.PrintWriter(sw));
+            java.util.Map<String, Object> body = java.util.Map.of(
+                    "error", ex.getMessage(),
+                    "trace", sw.toString()
+            );
+            return ResponseEntity.status(500).body(body);
+        }
+    }
+
+    // debug endpoint to test repository access separately
+    @GetMapping("/events/debug")
+    public ResponseEntity<?> debugList() {
+        try {
+            java.util.List<Event> events = eventRepository.findByIsPublicTrue();
+            return ResponseEntity.ok(java.util.Map.of("count", events.size()));
+        } catch (Exception ex) {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            ex.printStackTrace(new java.io.PrintWriter(sw));
+            return ResponseEntity.status(500).body(java.util.Map.of("error", ex.getMessage(), "trace", sw.toString()));
+        }
     }
 
     @GetMapping("/rooms")
     public List<Room> listRooms() {
         return roomRepository.findAll();
+    }
+
+    // inspect events one-by-one to find any problematic entity (non-conflicting path)
+    @GetMapping("/events/debug/list")
+    public ResponseEntity<?> inspectEvents() {
+        java.util.List<Event> events = eventRepository.findByIsPublicTrue();
+        int idx = 0;
+        for (Event e : events) {
+            try {
+                // attempt to access common properties
+                Long id = e.getId();
+                String title = e.getTitle();
+                String created = e.getCreatedBy() != null ? e.getCreatedBy().getUsername() : null;
+                // attempt to stringify registrationSchema
+                String schema = e.getRegistrationSchema();
+            } catch (Exception ex) {
+                java.io.StringWriter sw = new java.io.StringWriter();
+                ex.printStackTrace(new java.io.PrintWriter(sw));
+                return ResponseEntity.status(500).body(java.util.Map.of("failedIndex", idx, "failedId", e.getId(), "error", ex.getMessage(), "trace", sw.toString()));
+            }
+            idx++;
+        }
+        return ResponseEntity.ok(java.util.Map.of("ok", events.size()));
     }
 
     @GetMapping("/rooms/available")

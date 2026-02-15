@@ -85,18 +85,18 @@ export const spacing = {
 }
 
 export const borderRadius = {
-  sm: '0.375rem',
-  md: '0.5rem',
-  lg: '0.75rem',
-  xl: '1rem',
+  sm: '0.5rem',
+  md: '0.75rem',
+  lg: '1rem',
+  xl: '1.25rem',
   full: '9999px',
 }
 
 export const shadows = {
-  sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-  md: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-  lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-  xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+  sm: '0 2px 6px rgba(2,6,23,0.04)',
+  md: '0 8px 20px rgba(2,6,23,0.06)',
+  lg: '0 20px 40px rgba(2,6,23,0.08)',
+  xl: '0 30px 60px rgba(2,6,23,0.09)',
 }
 
 export const typography = {
@@ -205,17 +205,9 @@ export const paginationStyles = {
   buttonActive: 'relative inline-flex items-center px-4 py-2 border border-blue-500 text-sm font-medium rounded-md text-white bg-blue-600',
 }
 
-export const loadingSpinner = (
-  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-)
+export const loadingSpinner = 'spinner'
+export const loadingDots = ['.', '.', '.']
 
-export const loadingDots = (
-  <div className="flex space-x-1">
-    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-  </div>
-)
 
 // Utility functions
 export const cn = (...classes) => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import api from '../lib/api'
+import { showToast } from '../lib/toast'
 import { useAuth } from '../lib/AuthContext'
 
 export default function RoomBooking() {
@@ -39,6 +40,15 @@ export default function RoomBooking() {
   const [fixedSlotAvailability, setFixedSlotAvailability] = useState([])
   const [fixedSlotLoading, setFixedSlotLoading] = useState(false)
   const [slotWindowAvailability, setSlotWindowAvailability] = useState({})
+
+  // Calculate today's date in local timezone (YYYY-MM-DD format)
+  const todayLocal = (() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  })()
 
   const loadBaseData = async () => {
     setRoomsLoading(true)
@@ -283,6 +293,7 @@ export default function RoomBooking() {
       if (isFaculty) {
         if (!pref1) {
           setMessage('Please select a room')
+          showToast({ message: 'Please select a room', type: 'error' })
           return
         }
         let payload
@@ -301,11 +312,13 @@ export default function RoomBooking() {
         const res = await api.post('/api/faculty/bookings', payload)
         if (res.status === 200) {
           setMessage('Booked and approved immediately for the selected room.')
+          showToast({ message: 'Room booked — approved', type: 'success' })
           setEventId(''); setPref1(''); setPref2(''); setPref3('')
           setMeetingStart(''); setMeetingEnd(''); setMeetingPurpose('')
           setRoomConflicts([])
         } else {
           setMessage('Booking failed')
+          showToast({ message: 'Booking failed', type: 'error' })
         }
       } else {
         if (mode === 'event') {
@@ -337,6 +350,7 @@ export default function RoomBooking() {
         } else {
           if (!pref1) {
             setMessage('Please select a room')
+            showToast({ message: 'Please select a room', type: 'error' })
             return
           }
           if (!meetingStart || !meetingEnd || !meetingPurpose) { setMessage('Please provide meeting start, end, and purpose'); return }
@@ -459,30 +473,6 @@ export default function RoomBooking() {
                 </div>
               ) : (
                 <>
-                  <div className="bg-blue-50/70 border border-blue-100 p-3 rounded-lg">
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={useFixedSlotsForMeeting}
-                        onChange={(e) => {
-                          const checked = e.target.checked
-                          setUseFixedSlotsForMeeting(checked)
-                          setMessage('')
-                          setSelectedSlots([])
-                          setFixedSlotAvailability([])
-                          if (!checked) {
-                            setMeetingDate('')
-                            setMeetingStart('')
-                            setMeetingEnd('')
-                          }
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="font-medium text-blue-800">Use fixed daily time slots (based on weekly class schedule)</span>
-                    </label>
-                  </div>
-
-                  {useFixedSlotsForMeeting && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="form-group">
                         <label className="form-label">Meeting Date</label>
@@ -490,7 +480,12 @@ export default function RoomBooking() {
                           type="date"
                           className="form-input"
                           value={meetingDate}
-                          onChange={e => { setMeetingDate(e.target.value); setMessage(''); setSelectedSlots([]) }}
+                          min={todayLocal}
+                          onChange={e => { 
+                            const val = e.target.value
+                            if (val < todayLocal) return
+                            setMeetingDate(val); setMessage(''); setSelectedSlots([]) 
+                          }}
                         />
                       </div>
                       <div className="form-group">
@@ -504,34 +499,7 @@ export default function RoomBooking() {
                         />
                       </div>
                     </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="form-group">
-                      <label className="form-label">Meeting Start</label>
-                      <input
-                        type="datetime-local"
-                        className="form-input"
-                        value={meetingStart}
-                        onChange={e => { setMeetingStart(e.target.value); setMessage(''); }}
-                        onBlur={refreshAvailabilityForMeeting}
-                        disabled={useFixedSlotsForMeeting}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Meeting End</label>
-                      <input
-                        type="datetime-local"
-                        className="form-input"
-                        value={meetingEnd}
-                        onChange={e => { setMeetingEnd(e.target.value); setMessage(''); }}
-                        onBlur={refreshAvailabilityForMeeting}
-                        disabled={useFixedSlotsForMeeting}
-                      />
-                    </div>
-                  </div>
-
-                  {useFixedSlotsForMeeting && Number(pref1) > 0 && meetingDate && (
+                    {Number(pref1) > 0 && meetingDate && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-slate-600">Select up to 3 consecutive slots</div>
@@ -544,7 +512,15 @@ export default function RoomBooking() {
                           const fixedOk = fixedSlotAvailability.includes(slot)
                           const windowOk = slotWindowAvailability[slot]
                           const hasWindow = Object.keys(slotWindowAvailability).length > 0
-                          const isAvailable = fixedOk && (hasWindow ? windowOk !== false : true)
+                          let isAvailable = fixedOk && (hasWindow ? windowOk !== false : true)
+                          // disable slot if start time already passed for selected date
+                          if (meetingDate === todayLocal) {
+                            const [startStr] = slot.split('-')
+                            const slotStart = new Date(`${meetingDate}T${startStr}:00`)
+                            if (slotStart.getTime() <= Date.now()) {
+                              isAvailable = false
+                            }
+                          }
                           const isSelected = selectedSlots.includes(slot)
                           const slotCls = isSelected
                             ? 'bg-blue-600 text-white border-blue-700'
@@ -715,7 +691,7 @@ export default function RoomBooking() {
 
               {/* Message Display */}
               {message && (
-                <div className={`alert ${isErrorMessage(message) ? 'alert-error' : 'alert-success'}`}>
+                <div className={`alert ${isErrorMessage(message) ? 'alert-error' : 'alert-success'}`} role={isErrorMessage(message) ? 'alert' : 'status'} aria-live={isErrorMessage(message) ? 'assertive' : 'polite'}>
                   {message}
                 </div>
               )}

@@ -1,11 +1,17 @@
 import React, { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
+import NotificationBell from './notifications/NotificationBell'
+import NotificationsDrawer from './notifications/NotificationsDrawer'
+import BroadcastModal from './BroadcastModal'
+import Toast from './Toast'
 
 export default function Layout({ children }) {
   const { user, logout, hasRole } = useAuth()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [broadcastOpen, setBroadcastOpen] = useState(false)
   
   const isActive = (path) => location.pathname === path
 
@@ -27,21 +33,22 @@ export default function Layout({ children }) {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 shadow-sm border-b border-gray-200 sticky top-0">
         <div className="container">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <div className="flex items-center">
               <Link to="/" className="logo-link">
-                🎓 Campus Events
+                🎓 EventSphere
               </Link>
             </div>
             
             {/* Navigation */}
-            <nav className="hidden md:flex items-center">
+            <nav className="hidden md:flex items-center" role="navigation" aria-label="Primary navigation">
               {links.map(l => (
                 <Link
                   key={l.to}
                   to={l.to}
                   className={`nav-link ${isActive(l.to) ? 'active' : ''}`}
+                  aria-current={isActive(l.to) ? 'page' : undefined}
                 >
                   {l.label}
                 </Link>
@@ -54,9 +61,14 @@ export default function Layout({ children }) {
                 type="button"
                 className="md:hidden btn btn-secondary btn-sm"
                 onClick={() => setMobileOpen(v => !v)}
+                aria-label="Open menu"
               >
                 Menu
               </button>
+              {hasRole('ADMIN') && (
+                <button className="btn btn-ghost btn-sm" title="Broadcast" onClick={() => setBroadcastOpen(true)} aria-label="Open broadcast dialog">📣</button>
+              )}
+              <NotificationBell open={notificationsOpen} onOpen={() => setNotificationsOpen(true)} />
               {user ? (
                 <div className="flex items-center space-x-3">
                   <span className="hidden sm:inline text-sm text-gray-700">Welcome, {user.sub}</span>
@@ -74,6 +86,10 @@ export default function Layout({ children }) {
                 </div>
               )}
             </div>
+            {/* Notifications drawer (shared) */}
+            <NotificationsDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+            <BroadcastModal open={broadcastOpen} onClose={() => setBroadcastOpen(false)} />
+            <Toast />
           </div>
         </div>
 
@@ -99,7 +115,7 @@ export default function Layout({ children }) {
       </header>
       
       {/* Main Content */}
-      <main className="container py-8">
+      <main className="container py-6">
         {children}
       </main>
       
@@ -107,7 +123,10 @@ export default function Layout({ children }) {
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="container py-8">
           <div className="text-center text-gray-500">
-            <p>&copy; 2024 Campus Events. Built with React & Spring Boot.</p>
+            <p>&copy; 2024 EventSphere. Built with React & Spring Boot.</p>
+            <div className="mt-2 text-sm">
+              <a href="/style-guide" className="nav-link">Style guide</a>
+            </div>
           </div>
         </div>
       </footer>

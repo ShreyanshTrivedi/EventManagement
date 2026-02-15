@@ -37,6 +37,21 @@ api.interceptors.response.use(undefined, async (error) => {
   return Promise.reject(error)
 })
 
+
+// Notifications API
+export const fetchInbox = () => api.get('/api/notifications')
+export const fetchMyLegacyNotifications = () => api.get('/api/notifications/mine')
+export const broadcastNotification = (body) => api.post('/api/notifications/broadcast', body)
+export const postEventNotification = (eventId, body) => api.post(`/api/notifications/events/${eventId}`, body)
+export const fetchEventNotifications = (eventId) => api.get(`/api/notifications/events/${eventId}`)
+export const markDeliveryRead = (deliveryId) => api.post(`/api/notifications/deliveries/${deliveryId}/mark-read`)
+export const muteDelivery = (deliveryId, mute) => api.post(`/api/notifications/deliveries/${deliveryId}/mute`, { mute })
+
+// Threads
+export const createThread = (body) => api.post('/api/notifications/threads', body)
+export const fetchThreadMessages = (threadId) => api.get(`/api/notifications/threads/${threadId}/messages`)
+export const postThreadMessage = (threadId, body) => api.post(`/api/notifications/threads/${threadId}/messages`, body)
+
 export default api
 
 

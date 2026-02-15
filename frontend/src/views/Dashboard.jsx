@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import api from '../lib/api'
 import { useNavigate } from 'react-router-dom'
+import Skeleton from '../ui/Skeleton'
 
 export default function Dashboard() {
   const { user, hasRole } = useAuth()
@@ -53,7 +54,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">Welcome back, {user?.sub}!</p>
@@ -63,11 +64,14 @@ export default function Dashboard() {
           {(hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE') || hasRole('ADMIN')) && (
             <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate('/book-room')}>Book Room</button>
           )}
+          {hasRole('ADMIN') && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/notifications')}>Broadcast</button>
+          )}
         </div>
       </div>
 
       {/* Quick Stats (role-aware) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {isGeneralLike && (
           <div className="card">
             <div className="flex items-start justify-between">
@@ -122,7 +126,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* My Registered Events - only for GENERAL_USER / CLUB_ASSOCIATE */}
         {isGeneralLike && (
           <div className="card">
@@ -133,7 +137,13 @@ export default function Dashboard() {
               </span>
             </div>
             {loading ? (
-              <div className="text-gray-500 text-sm">Loading...</div>
+              <div>
+                <Skeleton className="w-32 mb-3" height="1.25rem" />
+                <div className="space-y-3">
+                  <Skeleton className="w-full" height="1.125rem" />
+                  <Skeleton className="w-full" height="1.125rem" />
+                </div>
+              </div>
             ) : registrations.length === 0 ? (
               <div className="text-gray-500 text-sm">No registrations yet.</div>
             ) : (
@@ -169,7 +179,13 @@ export default function Dashboard() {
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/events/create')}>Create</button>
             </div>
             {loading ? (
-              <div className="text-gray-500 text-sm">Loading...</div>
+              <div>
+                <Skeleton className="w-32 mb-3" height="1.25rem" />
+                <div className="space-y-3">
+                  <Skeleton className="w-full" height="1.125rem" />
+                  <Skeleton className="w-full" height="1.125rem" />
+                </div>
+              </div>
             ) : createdEvents.length === 0 ? (
               <div className="text-gray-500 text-sm">No events created yet.</div>
             ) : (
@@ -278,7 +294,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="card mt-8">
+      <div className="card mt-6">
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <a href="/events" className="btn btn-primary w-full">

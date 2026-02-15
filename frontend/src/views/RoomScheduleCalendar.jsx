@@ -138,7 +138,16 @@ const RoomScheduleCalendar = ({ roomId, view = 'week' }) => {
     return `${startOfWeek.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`
   }
   
-  if (loading) return <div className="text-center py-8">Loading schedule...</div>
+  if (loading) return (
+    <div className="text-center py-8">
+      <div className="mx-auto mb-4" style={{maxWidth:480}}>
+        <div className="skeleton w-full h-8 mb-3 animate-pulse"></div>
+        <div className="skeleton w-full h-6 mb-2 animate-pulse"></div>
+        <div className="skeleton w-full h-6 animate-pulse"></div>
+      </div>
+      <div className="text-gray-600">Loading schedule...</div>
+    </div>
+  )
   
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">

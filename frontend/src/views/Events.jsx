@@ -10,7 +10,7 @@ export default function Events() {
   const [events, setEvents] = useState([])
   const [eventList, setEventList] = useState([])
   const [loading, setLoading] = useState(true)
-  const { hasRole, clubId } = useAuth()
+  const { hasRole, clubId, user } = useAuth()
 
   useEffect(() => {
     api.get('/api/public/events').then((res) => {
@@ -35,13 +35,19 @@ export default function Events() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="spinner mx-auto mb-4"></div>
+        <div className="mx-auto mb-6" style={{maxWidth:320}}>
+          <div className="skeleton w-full h-8 mb-3 animate-pulse"></div>
+          <div className="skeleton w-full h-6 mb-2 animate-pulse"></div>
+          <div className="skeleton w-full h-6 animate-pulse"></div>
+        </div>
         <p className="text-gray-600">Loading events...</p>
       </div>
     )
   }
 
   const canRegister = (evt) => {
+    // creators should not register for their own events
+    if (user && evt.createdBy && evt.createdBy === user.sub) return false
     if (hasRole('ADMIN') || hasRole('FACULTY')) return false
     if (hasRole('CLUB_ASSOCIATE')) {
       if (clubId && evt.clubId && evt.clubId === clubId) return false
@@ -63,7 +69,7 @@ export default function Events() {
     <div>
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Campus Events</h1>
+          <h1 className="text-3xl font-bold text-gray-900">EventSphere</h1>
           <p className="text-gray-600">Discover and register for upcoming events</p>
         </div>
         {(hasRole('ADMIN') || hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE')) && (
@@ -114,7 +120,7 @@ export default function Events() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {upcomingEvents.map(event => (
-              <div key={event.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow" style={{ background: 'rgba(255,255,255,0.8)' }}>
+              <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow" style={{ background: 'rgba(255,255,255,0.8)' }}>
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
                   <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">

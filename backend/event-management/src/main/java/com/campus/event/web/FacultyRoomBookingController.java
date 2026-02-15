@@ -72,6 +72,11 @@ public class FacultyRoomBookingController {
             end = body.end;
         }
 
+        // Enforce server-side cutoff for direct bookings: start must be in the future
+        if (event == null && !start.isAfter(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body("start must be in the future");
+        }
+
         boolean available = availabilityService.isRoomAvailable(room.getId(), start, end);
         if (!available) {
             return ResponseEntity.status(409).body("Room not available in the requested window");

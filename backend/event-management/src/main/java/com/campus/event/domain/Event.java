@@ -35,7 +35,7 @@ public class Event {
 
     private boolean isPublic = true;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "created_by_id")
     private User createdBy;
 

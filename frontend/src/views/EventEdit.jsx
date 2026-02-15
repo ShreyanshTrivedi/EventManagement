@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { showToast } from '../lib/toast'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../lib/api'
 
@@ -16,6 +17,14 @@ export default function EventEdit() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const isFormValid = title.trim() && start && end && (new Date(`${end}:00`) > new Date(`${start}:00`))
+
+  const getMinDateTimeLocal = () => {
+    const now = new Date()
+    now.setSeconds(0,0)
+    const pad = (n) => String(n).padStart(2,'0')
+    return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+  }
 
   useEffect(() => {
     api.get(`/api/public/events/${id}`)
@@ -54,6 +63,13 @@ export default function EventEdit() {
         setError('Please provide start and end date/time values')
         return
       }
+      // client-side validation: no past dates and end after start
+      const now = new Date()
+      const startDt = new Date(`${start}:00`)
+      const endDt = new Date(`${end}:00`)
+      if (startDt < now) { setError('Start time cannot be in the past'); return }
+      if (endDt <= startDt) { setError('End time must be after start time'); return }
+
       // datetime-local presents local time as 'YYYY-MM-DDTHH:MM'. Append seconds and send as-is
       const startValue = `${start}:00`
       const endValue = `${end}:00`
@@ -69,9 +85,11 @@ export default function EventEdit() {
       })
       if (res.status === 200) {
         setMessage('Event updated')
+        showToast({ message: 'Event updated', type: 'success' })
         setTimeout(() => navigate('/dashboard'), 800)
       } else {
         setError('Failed to update event')
+        showToast({ message: 'Failed to update event', type: 'error' })
       }
     } catch (err) {
       setError(err.response?.data || 'Failed to update event')
@@ -124,11 +142,11 @@ export default function EventEdit() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-group">
               <label className="form-label">Start</label>
-              <input type="datetime-local" className="form-input" value={start} onChange={e => setStart(e.target.value)} required />
+              <input type="datetime-local" className="form-input" value={start} onChange={e => setStart(e.target.value)} required min={getMinDateTimeLocal()} />
             </div>
             <div className="form-group">
               <label className="form-label">End</label>
-              <input type="datetime-local" className="form-input" value={end} onChange={e => setEnd(e.target.value)} required />
+              <input type="datetime-local" className="form-input" value={end} onChange={e => setEnd(e.target.value)} required min={start || getMinDateTimeLocal()} />
             </div>
           </div>
 
@@ -151,8 +169,8 @@ export default function EventEdit() {
             </div>
           </div>
 
-          {error && <div className="alert alert-error">{error}</div>}
-          {message && <div className="alert alert-success">{message}</div>}
+          {error && <div className="alert alert-error" role="alert" aria-live="assertive">{error}</div>}
+          {message && <div className="alert alert-success" role="status" aria-live="polite">{message}</div>}
 
           <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
             <button type="button" className="btn btn-secondary" onClick={() => navigate('/dashboard')} disabled={saving}>Cancel</button>

@@ -7,7 +7,11 @@ C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\m
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\FixedTimetable.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\Floor.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\Notification.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\NotificationDelivery.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\NotificationMessage.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\NotificationOrigin.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\NotificationStatus.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\NotificationThread.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\NotificationType.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\Registration.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\Role.java
@@ -15,7 +19,9 @@ C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\m
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\RoomBookingRequest.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\RoomBookingStatus.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\RoomType.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\ThreadMessage.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\TimeSlot.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\Urgency.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\domain\User.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\EventManagementApplication.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\BookingRepository.java
@@ -25,11 +31,15 @@ C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\m
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\EventRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\FixedTimetableRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\FloorRepository.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\NotificationDeliveryRepository.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\NotificationMessageRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\NotificationRepository.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\NotificationThreadRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\RegistrationRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\Repositories.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\RoomBookingRequestRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\RoomRepository.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\ThreadMessageRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\repository\UserRepository.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\security\JwtAuthenticationFilter.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\security\JwtTokenService.java
@@ -40,6 +50,7 @@ C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\m
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\service\CustomUserDetailsService.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\service\DataInitializationService.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\service\EventService.java
+C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\service\NotificationCenterService.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\service\NotificationService.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\service\RegistrationService.java
 C:\Users\shrey\OneDrive\Documents\EventManagement\backend\event-management\src\main\java\com\campus\event\service\RoomAvailabilityService.java
