@@ -19,9 +19,11 @@ export default function Dashboard() {
     const calls = []
     // Registrations only matter for general users and club associates
     if (isGeneralLike) {
-      calls.push(api.get('/api/registrations/mine').catch(() => ({ key: 'regs', data: [] })))
+      calls.push(api.get('/api/registrations/mine').catch(() => ({ key: 'regsLegacy', data: [] })))
+      calls.push(api.get('/api/event-registrations/mine').catch(() => ({ key: 'regsUser', data: [] })))
     } else {
-      calls.push(Promise.resolve({ key: 'regs', data: [] }))
+      calls.push(Promise.resolve({ key: 'regsLegacy', data: [] }))
+      calls.push(Promise.resolve({ key: 'regsUser', data: [] }))
     }
     // Created events for roles that can create
     if (isCreatorRole) {
@@ -32,8 +34,22 @@ export default function Dashboard() {
       calls.push(Promise.resolve({ key: 'bookings', data: [] }))
     }
 
-    Promise.all(calls).then(([regsRes, createdRes, bookingsRes]) => {
-      setRegistrations(regsRes.data || [])
+    Promise.all(calls).then(([regsLegacyRes, regsUserRes, createdRes, bookingsRes]) => {
+      const legacy = regsLegacyRes.data || []
+      const userRegs = regsUserRes.data || []
+      const mergedByEventId = new Map()
+
+      for (const r of legacy) {
+        if (r && r.eventId != null) mergedByEventId.set(Number(r.eventId), r)
+      }
+      for (const r of userRegs) {
+        if (!r || r.eventId == null) continue
+        const eventId = Number(r.eventId)
+        if (!mergedByEventId.has(eventId)) {
+          mergedByEventId.set(eventId, r)
+        }
+      }
+      setRegistrations(Array.from(mergedByEventId.values()))
       setCreatedEvents(createdRes.data || [])
       setBookings(bookingsRes.data || [])
     }).finally(() => setLoading(false))
@@ -51,6 +67,12 @@ export default function Dashboard() {
     if (s === 'REJECTED') return 'bg-red-100 text-red-800'
     return 'bg-gray-100 text-gray-800'
   }
+
+  const showRegistered = isGeneralLike
+  const showCreatorPanels = isCreatorRole
+  const mainGridClass = (showRegistered && showCreatorPanels)
+    ? 'grid grid-cols-1 lg:grid-cols-2 gap-6'
+    : 'grid grid-cols-1 gap-6'
 
   return (
     <div>
@@ -126,9 +148,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={mainGridClass}>
         {/* My Registered Events - only for GENERAL_USER / CLUB_ASSOCIATE */}
-        {isGeneralLike && (
+        {showRegistered && (
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">My Registered Events</h2>
@@ -172,7 +194,7 @@ export default function Dashboard() {
         )}
 
         {/* My Created Events - for ADMIN/FACULTY/CLUB_ASSOCIATE */}
-        {isCreatorRole && (
+        {showCreatorPanels && (
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">Events I Created</h2>
@@ -222,6 +244,13 @@ export default function Dashboard() {
                         >
                           View / Edit Event
                         </button>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => navigate(`/register/${ev.id}`)}
+                        >
+                          Notifications
+                        </button>
                       </div>
                     </div>
                   )
@@ -232,7 +261,7 @@ export default function Dashboard() {
         )}
 
         {/* My Room Bookings - only for creator roles (they can book rooms) */}
-        {isCreatorRole && (
+        {showCreatorPanels && (
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">My Room Requests</h2>

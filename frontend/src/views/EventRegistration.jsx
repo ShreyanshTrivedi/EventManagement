@@ -55,6 +55,9 @@ export default function EventRegistration() {
   }, [event])
 
   const isCreator = user && event && event.createdBy && user.sub === event.createdBy
+  const canRegisterRole = hasRole('GENERAL_USER') || hasRole('CLUB_ASSOCIATE')
+  const canViewNotifications = !!event && (isRegistered || isCreator || hasRole('ADMIN'))
+  const canPostNotifications = !!event && (isCreator || hasRole('ADMIN'))
 
   const formattedDate = event && event.startTime ? new Date(event.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ''
   const formattedTimeRange = event && event.startTime && event.endTime ? `${new Date(event.startTime).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})} — ${new Date(event.endTime).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}` : ''
@@ -73,10 +76,11 @@ export default function EventRegistration() {
     setLoading(true)
     
     try {
-      const body = { eventId: Number(eventId), email, fullName, answers }
-      await api.post('/api/registrations', body)
-      setMessage('Registration successful! You will receive a confirmation email shortly.')
+      const res = await api.post(`/api/events/${eventId}/register`, { fullName: fullName.trim() })
+      const already = res?.data?.status === 'already_registered'
+      setMessage(already ? 'You are already registered for this event.' : 'Registration successful!')
       showToast({ message: 'Registration successful', type: 'success' })
+      setIsRegistered(true)
       setTimeout(() => {
         navigate('/events')
       }, 2000)
@@ -99,7 +103,7 @@ export default function EventRegistration() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-6xl mx-auto px-2 sm:px-4">
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Event Registration</h1>
@@ -146,6 +150,12 @@ export default function EventRegistration() {
         {/* Registration Form */}
         <div className="card">
           <h2 className="text-xl font-semibold mb-6">Registration Form</h2>
+
+          {!canRegisterRole && (
+            <div className="alert alert-error mb-4">
+              Registration is only available for General Users and Club Associates.
+            </div>
+          )}
 
           {closed && (
             <div className="alert alert-error mb-4">
@@ -205,7 +215,7 @@ export default function EventRegistration() {
             <button
               type="submit"
               className="btn btn-primary w-full"
-              disabled={loading || closed || isCreator}
+              disabled={loading || closed || isCreator || !canRegisterRole}
             >
               {loading ? (
                 <div className="flex items-center justify-center">
@@ -231,7 +241,7 @@ export default function EventRegistration() {
       </div>
 
       {/* Event notifications (only for registered users) */}
-      <EventNotificationsPanel eventId={eventId} canView={isRegistered} canPost={isCreator || hasRole('ADMIN')} />
+      <EventNotificationsPanel eventId={eventId} canView={canViewNotifications} canPost={canPostNotifications} />
 
     </div>
   )

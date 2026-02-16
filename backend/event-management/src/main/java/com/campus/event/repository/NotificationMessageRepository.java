@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface NotificationMessageRepository extends JpaRepository<NotificationMessage, Long> {
     List<NotificationMessage> findByOriginOrderByCreatedAtDesc(com.campus.event.domain.NotificationOrigin origin);
+
+    List<NotificationMessage> findByEvent_IdOrderByCreatedAtDesc(Long eventId);
 }

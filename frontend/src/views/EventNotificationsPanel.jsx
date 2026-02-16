@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { fetchEventNotifications, createThread, fetchThreadMessages, postThreadMessage, postEventNotification } from '../lib/api'
+import { useNavigate } from 'react-router-dom'
+import { fetchEventNotifications, createThread, postEventNotification } from '../lib/api'
 
 export default function EventNotificationsPanel({ eventId, canView, canPost }) {
   const [items, setItems] = useState([])
-  const [activeThread, setActiveThread] = useState(null)
-  const [threadMessages, setThreadMessages] = useState([])
-  const [replyText, setReplyText] = useState('')
+  const navigate = useNavigate()
 
   // composer state (event owners / admin)
   const [title, setTitle] = useState('')
@@ -24,18 +23,8 @@ export default function EventNotificationsPanel({ eventId, canView, canPost }) {
     try {
       const res = await createThread({ notificationId: item.id, title: item.title })
       const threadId = res.data.threadId
-      setActiveThread({ id: threadId, title: item.title })
-      const msgs = await fetchThreadMessages(threadId)
-      setThreadMessages(msgs.data || [])
+      navigate(`/notifications/threads/${threadId}`)
     } catch (err) { console.error(err) }
-  }
-
-  const sendReply = async () => {
-    if (!activeThread || !replyText.trim()) return
-    await postThreadMessage(activeThread.id, { content: replyText })
-    const msgs = await fetchThreadMessages(activeThread.id)
-    setThreadMessages(msgs.data || [])
-    setReplyText('')
   }
 
   const postNotification = async () => {
@@ -104,31 +93,13 @@ export default function EventNotificationsPanel({ eventId, canView, canPost }) {
                 <div className="text-xs text-slate-400 mt-2">{new Date(it.createdAt).toLocaleString()}</div>
               </div>
               <div className="flex flex-col gap-2 items-end">
-                {it.threadEnabled && <button onClick={() => openDiscussion(it)} className="btn btn-ghost btn-sm">Discuss</button>}
+                {it.threadEnabled && <button type="button" onClick={() => openDiscussion(it)} className="btn btn-ghost btn-sm">Discuss</button>}
                 {!it.read && <span className="text-xs text-indigo-600">New</span>}
               </div>
             </div>
           </div>
         ))}
       </div>
-
-      {activeThread && (
-        <div className="mt-4 border-t pt-4">
-          <div className="font-semibold mb-2">Discussion — {activeThread.title}</div>
-          <div className="space-y-3 max-h-56 overflow-y-auto mb-3">
-            {threadMessages.map(m => (
-              <div key={m.id} className="text-sm">
-                <div className="text-xs text-gray-400">{m.author} • {new Date(m.createdAt).toLocaleString()}</div>
-                <div className="mt-1">{m.content}</div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input value={replyText} onChange={e => setReplyText(e.target.value)} className="form-input flex-1" placeholder="Write a reply..." />
-            <button onClick={sendReply} className="btn btn-primary">Send</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

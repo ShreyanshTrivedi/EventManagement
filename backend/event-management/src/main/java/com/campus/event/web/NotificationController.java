@@ -4,10 +4,15 @@ import com.campus.event.domain.Notification;
 import com.campus.event.domain.User;
 import com.campus.event.domain.Event;
 import com.campus.event.domain.NotificationThread;
+import com.campus.event.domain.NotificationDelivery;
+import com.campus.event.domain.NotificationMessage;
+import com.campus.event.domain.NotificationStatus;
 import com.campus.event.repository.NotificationRepository;
 import com.campus.event.service.NotificationCenterService;
 import com.campus.event.repository.UserRepository;
 import com.campus.event.repository.EventRepository;
+import com.campus.event.repository.NotificationMessageRepository;
+import com.campus.event.repository.NotificationDeliveryRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,15 +33,21 @@ public class NotificationController {
     private final NotificationCenterService centerService;
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
+    private final NotificationMessageRepository messageRepository;
+    private final NotificationDeliveryRepository deliveryRepository;
 
     public NotificationController(NotificationRepository notificationRepository,
                                   NotificationCenterService centerService,
                                   UserRepository userRepository,
-                                  EventRepository eventRepository) {
+                                  EventRepository eventRepository,
+                                  NotificationMessageRepository messageRepository,
+                                  NotificationDeliveryRepository deliveryRepository) {
         this.notificationRepository = notificationRepository;
         this.centerService = centerService;
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
+        this.messageRepository = messageRepository;
+        this.deliveryRepository = deliveryRepository;
     }
 
     @GetMapping("/mine")
@@ -114,17 +125,45 @@ public class NotificationController {
     @PreAuthorize("hasAnyRole('GENERAL_USER','CLUB_ASSOCIATE','FACULTY','ADMIN')")
     public ResponseEntity<List<Map<String, Object>>> eventInbox(@PathVariable Long eventId, @AuthenticationPrincipal UserDetails principal) {
         // only registered users (or admins) can view event-tailored messages
-        boolean isRegistered = false;
+        boolean isOwner = false;
         try {
-            isRegistered = eventRepository.findById(eventId).map(e -> e.getCreatedBy() != null && e.getCreatedBy().getUsername().equals(principal.getUsername())).orElse(false);
+            isOwner = eventRepository.findById(eventId).map(e -> e.getCreatedBy() != null && e.getCreatedBy().getUsername().equals(principal.getUsername())).orElse(false);
         } catch (Exception ignored) { }
         // if not owner, check registration
         boolean isAdmin = principal.getAuthorities().stream().anyMatch(a -> a.getAuthority().contains("ADMIN"));
+
+        // Backfill deliveries for owner/admin so they can see and discuss older event notifications.
+        if (isOwner || isAdmin) {
+            try {
+                User u = userRepository.findByUsername(principal.getUsername()).orElse(null);
+                if (u != null && u.getId() != null) {
+                    List<NotificationMessage> msgs = messageRepository.findByEvent_IdOrderByCreatedAtDesc(eventId);
+                    List<Long> delivered = deliveryRepository.findDeliveredNotificationIdsForUserEvent(u.getId(), eventId);
+                    java.util.HashSet<Long> deliveredSet = new java.util.HashSet<>(delivered);
+                    java.util.ArrayList<NotificationDelivery> toCreate = new java.util.ArrayList<>();
+                    for (NotificationMessage nm : msgs) {
+                        if (nm == null || nm.getId() == null) continue;
+                        if (deliveredSet.contains(nm.getId())) continue;
+                        NotificationDelivery d = new NotificationDelivery();
+                        d.setNotification(nm);
+                        d.setUser(u);
+                        d.setDeliveryStatus(NotificationStatus.PENDING);
+                        toCreate.add(d);
+                    }
+                    if (!toCreate.isEmpty()) {
+                        deliveryRepository.saveAll(toCreate);
+                    }
+                }
+            } catch (Exception ignored) {
+                // best-effort backfill
+            }
+        }
+
         if (!isAdmin) {
             // check event registration repository through service deliveries
             List<com.campus.event.domain.NotificationDelivery> deliveries = centerService.getDeliveriesForUser(principal.getUsername());
             boolean hasForEvent = deliveries.stream().anyMatch(d -> d.getNotification().getEvent() != null && d.getNotification().getEvent().getId().equals(eventId));
-            if (!hasForEvent && !isRegistered) {
+            if (!hasForEvent && !isOwner) {
                 return ResponseEntity.status(403).body(null);
             }
         }

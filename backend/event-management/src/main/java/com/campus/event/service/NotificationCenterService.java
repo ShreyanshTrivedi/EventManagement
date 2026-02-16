@@ -38,7 +38,7 @@ public class NotificationCenterService {
     }
 
     public List<NotificationDelivery> getDeliveriesForUser(String username) {
-        return deliveryRepository.findByUser_UsernameOrderByCreatedAtDesc(username);
+        return deliveryRepository.findInboxByUsernameWithNotification(username);
     }
 
     @Transactional
@@ -118,6 +118,13 @@ public class NotificationCenterService {
     @Transactional
     public NotificationThread createThreadForNotification(Long notificationId, String title, String message, User author) {
         NotificationMessage nm = messageRepository.findById(notificationId).orElseThrow(() -> new IllegalArgumentException("Notification not found"));
+
+        // idempotent: reuse existing thread for a notification
+        Optional<NotificationThread> existing = threadRepository.findByNotification_Id(notificationId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
         NotificationThread t = new NotificationThread();
         t.setNotification(nm);
         t.setEvent(nm.getEvent());
@@ -153,7 +160,7 @@ public class NotificationCenterService {
     }
 
     public List<ThreadMessage> getMessages(Long threadId) {
-        return threadMessageRepository.findByThread_IdOrderByCreatedAtAsc(threadId);
+        return threadMessageRepository.findByThreadIdWithAuthor(threadId);
     }
 
     @Transactional

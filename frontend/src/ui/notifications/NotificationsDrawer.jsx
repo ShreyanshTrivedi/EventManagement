@@ -1,13 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { fetchInbox, markDeliveryRead, muteDelivery, createThread, fetchThreadMessages, postThreadMessage } from '../../lib/api'
+import { fetchInbox, markDeliveryRead, muteDelivery, createThread } from '../../lib/api'
 import NotificationCard from './NotificationCard'
 
 export default function NotificationsDrawer({ open, onClose }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-  const [activeThread, setActiveThread] = useState(null)
-  const [threadMessages, setThreadMessages] = useState([])
-  const [replyText, setReplyText] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -49,19 +46,8 @@ export default function NotificationsDrawer({ open, onClose }) {
     try {
       const res = await createThread({ notificationId: item.id, title: item.title })
       const threadId = res.data.threadId
-      setActiveThread({ id: threadId, title: item.title })
-      const msgs = await fetchThreadMessages(threadId)
-      setThreadMessages(msgs.data || [])
-    } catch (err) { console.error(err) }
-  }
-
-  const sendReply = async () => {
-    if (!activeThread || !replyText.trim()) return
-    try {
-      await postThreadMessage(activeThread.id, { content: replyText })
-      const msgs = await fetchThreadMessages(activeThread.id)
-      setThreadMessages(msgs.data || [])
-      setReplyText('')
+      onClose && onClose()
+      window.location.assign(`/notifications/threads/${threadId}`)
     } catch (err) { console.error(err) }
   }
 
@@ -77,6 +63,7 @@ export default function NotificationsDrawer({ open, onClose }) {
             await Promise.all(unread.map(i => markDeliveryRead(i.deliveryId).catch(()=>{})))
             setItems(prev => prev.map(x => ({ ...x, read: true })))
           }} aria-label="Mark all as read">Mark all</button>
+          <button className="btn btn-sm btn-ghost" onClick={() => { onClose && onClose(); window.location.assign('/notifications') }} aria-label="View all notifications">View all</button>
         </div>
         <div className="text-sm text-gray-500">Recent</div>
       </div>
@@ -106,23 +93,6 @@ export default function NotificationsDrawer({ open, onClose }) {
           ))
         )}
       </div>
-      {activeThread && (
-        <div className="border-t p-3 bg-gray-50">
-          <div className="font-semibold mb-2">{activeThread.title}</div>
-          <div className="space-y-2 max-h-32 overflow-y-auto mb-3">
-            {threadMessages.map(m => (
-              <div key={m.id} className="text-sm">
-                <div className="text-xs text-gray-400">{m.author} • {new Date(m.createdAt).toLocaleString()}</div>
-                <div className="mt-1">{m.content}</div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input value={replyText} onChange={e => setReplyText(e.target.value)} className="form-input flex-1" placeholder="Write a reply..." aria-label="Reply to thread" />
-            <button onClick={sendReply} className="btn btn-primary">Send</button>
-          </div>
-        </div>
-      )}
       <div className="p-3 border-t text-right">
         <button onClick={onClose} className="btn btn-ghost" aria-label="Close notifications">Close</button>
       </div>

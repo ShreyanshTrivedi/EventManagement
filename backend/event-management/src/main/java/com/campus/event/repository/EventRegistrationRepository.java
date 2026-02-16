@@ -10,6 +10,9 @@ public interface EventRegistrationRepository extends JpaRepository<EventRegistra
     boolean existsByEvent_IdAndUser_Username(Long eventId, String username);
     List<EventRegistration> findByEvent_Id(Long eventId);
     List<EventRegistration> findByUser_Username(String username);
+
+    @Query("select r from EventRegistration r join fetch r.event where r.user.username = ?1")
+    List<EventRegistration> findByUserUsernameWithEvent(String username);
     @Query("select r.user.username from EventRegistration r where r.event.id = ?1")
     List<String> findUsernamesByEventId(Long eventId);
 }

@@ -10,6 +10,7 @@ export default function Events() {
   const [events, setEvents] = useState([])
   const [eventList, setEventList] = useState([])
   const [loading, setLoading] = useState(true)
+  const [registeredEventIds, setRegisteredEventIds] = useState(() => new Set())
   const { hasRole, clubId, user } = useAuth()
 
   useEffect(() => {
@@ -32,6 +33,24 @@ export default function Events() {
     })
   }, [])
 
+  useEffect(() => {
+    if (!user) {
+      setRegisteredEventIds(new Set())
+      return
+    }
+    let mounted = true
+    // Prefer user-linked event registrations
+    api.get('/api/event-registrations/mine').then(res => {
+      if (!mounted) return
+      const ids = new Set((res.data || []).map(r => Number(r.eventId)).filter(n => !Number.isNaN(n)))
+      setRegisteredEventIds(ids)
+    }).catch(() => {
+      if (!mounted) return
+      setRegisteredEventIds(new Set())
+    })
+    return () => { mounted = false }
+  }, [user])
+
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -46,6 +65,7 @@ export default function Events() {
   }
 
   const canRegister = (evt) => {
+    if (evt && registeredEventIds.has(Number(evt.id))) return false
     // creators should not register for their own events
     if (user && evt.createdBy && evt.createdBy === user.sub) return false
     if (hasRole('ADMIN') || hasRole('FACULTY')) return false
@@ -53,6 +73,15 @@ export default function Events() {
       if (clubId && evt.clubId && evt.clubId === clubId) return false
     }
     return true
+  }
+
+  const canOpenEventPage = (evt) => {
+    // The event page also hosts event notifications. Allow creators/admins to open it even if they can't register.
+    if (!user) return false
+    if (hasRole('ADMIN') || hasRole('FACULTY')) return true
+    if (evt && evt.createdBy && evt.createdBy === user.sub) return true
+    // general users / club associates can open if they are eligible to register
+    return canRegister(evt)
   }
 
   const now = new Date()
@@ -97,7 +126,7 @@ export default function Events() {
           }}
           eventClick={(info) => {
             const event = eventList.find(e => e.id === info.event.id)
-            if (event && canRegister(event)) {
+            if (event && canOpenEventPage(event)) {
               window.location.href = `/register/${event.id}`
             }
           }}
@@ -158,9 +187,19 @@ export default function Events() {
                     Register for Event
                   </Link>
                 ) : (
-                  <button className="btn btn-secondary btn-sm w-full" disabled>
-                    Registration not available
-                  </button>
+                  registeredEventIds.has(Number(event.id)) ? (
+                    <button className="btn btn-secondary btn-sm w-full" disabled>
+                      Registered
+                    </button>
+                  ) : canOpenEventPage(event) ? (
+                    <Link to={`/register/${event.id}`} className="btn btn-secondary btn-sm w-full">
+                      View Event
+                    </Link>
+                  ) : (
+                    <button className="btn btn-secondary btn-sm w-full" disabled>
+                      Registration not available
+                    </button>
+                  )
                 )}
               </div>
             ))}

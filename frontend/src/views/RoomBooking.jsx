@@ -393,7 +393,7 @@ export default function RoomBooking() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto px-2 sm:px-4">
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Book a Room</h1>
@@ -404,9 +404,9 @@ export default function RoomBooking() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         {/* Booking Form */}
-        <div className="lg:col-span-2">
+        <div>
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">Room Reservation</h2>
@@ -717,37 +717,43 @@ export default function RoomBooking() {
           </div>
         </div>
 
-        {/* Available Rooms */}
-        <div className="lg:col-span-1">
+        {/* Sidebar */}
+        <div>
           <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Available Rooms</h3>
-            <div className="space-y-4">
-              {rooms.map(room => (
-                <div 
-                  key={room.id} 
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                    Number(pref1) === room.id 
-                      ? 'border-blue-300 bg-blue-50/60' 
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                  onClick={() => {
-                    setPref1(String(room.id))
-                    setRoomConflicts([])
-                    loadRoomConflicts(room.id)
-                  }}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-semibold text-slate-900">{room.name}</h4>
-                      <p className="text-sm text-slate-600">{room.location}</p>
-                    </div>
-                    <span className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded">
-                      {room.capacity} seats
+            <h3 className="text-lg font-semibold mb-4">Selected Room</h3>
+            {!Number(pref1) ? (
+              <div className="text-sm text-slate-600">Select a room preference to see details.</div>
+            ) : !selectedRoomInfo ? (
+              <div className="text-sm text-slate-600">Room details unavailable.</div>
+            ) : (
+              <div className="space-y-2 text-sm text-slate-700">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-semibold text-slate-900">{selectedRoomInfo.name}</div>
+                    <div className="text-xs text-slate-500">{selectedRoomInfo.location || '—'}</div>
+                  </div>
+                  <span className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded">{selectedRoomInfo.capacity} seats</span>
+                </div>
+                {Object.keys(roomWindowAvailability).length > 0 && (
+                  <div className="text-xs">
+                    Availability in selected window:{' '}
+                    <span className={roomWindowAvailability[Number(selectedRoomInfo.id)] ? 'text-emerald-700' : 'text-rose-700'}>
+                      {roomWindowAvailability[Number(selectedRoomInfo.id)] ? 'AVAILABLE' : 'OCCUPIED'}
                     </span>
                   </div>
-                </div>
-              ))}
-            </div>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setRoomConflicts([])
+                    loadRoomConflicts(Number(pref1))
+                  }}
+                >
+                  Check conflicts
+                </button>
+              </div>
+            )}
           </div>
 
           {roomConflicts.length > 0 && (
