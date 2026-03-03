@@ -123,10 +123,7 @@ export default function Layout({ children }) {
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="container py-8">
           <div className="text-center text-gray-500">
-            <p>&copy; 2024 EventSphere. Built with React & Spring Boot.</p>
-            <div className="mt-2 text-sm">
-              <a href="/style-guide" className="nav-link">Style guide</a>
-            </div>
+            <p>2026 EventSphere. Built with React & Spring Boot.</p>
           </div>
         </div>
       </footer>
