@@ -1,13 +1,11 @@
 server:
-  port: ${PORT:8080}
+  port: 8080
 
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/campus_events?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -15,12 +13,11 @@ spring:
       hibernate:
         format_sql: true
     open-in-view: false
-
   mail:
-    host: ${MAIL_HOST:smtp.example.com}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:your-email@example.com}
-    password: ${MAIL_PASSWORD:your-email-password}
+    host: smtp.example.com
+    port: 587
+    username: your-email@example.com
+    password: your-email-password
     properties:
       mail:
         smtp:
@@ -32,15 +29,16 @@ app:
   security:
     jwtSecret: ${APP_SECURITY_JWTSECRET:change-this-dev-secret-at-least-32-chars-long}
     jwtExpirationMs: 3600000
-
   notifications:
     twilio:
-      accountSid: ${TWILIO_ACCOUNT_SID:YOUR_TWILIO_SID}
-      authToken: ${TWILIO_AUTH_TOKEN:YOUR_TWILIO_TOKEN}
-      fromNumber: ${TWILIO_FROM_NUMBER:+10000000000}
+      accountSid: YOUR_TWILIO_SID
+      authToken: YOUR_TWILIO_TOKEN
+      fromNumber: "+10000000000"
 
 logging:
   level:
     org.hibernate.SQL: warn
-    org.springframework.security: info
-    org.springframework.web.cors: info
+    org.springframework.security: debug
+    org.springframework.web.cors: debug
+
+
