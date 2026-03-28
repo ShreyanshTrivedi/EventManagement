@@ -13,6 +13,8 @@ const sizeClasses = {
 const variantClasses = {
   primary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-black/20',
   secondary: 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100',
+  success: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-black/20',
+  danger: 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-black/20',
   ghost: 'bg-transparent hover:bg-slate-800 text-slate-300',
   outline: 'border border-slate-700 text-slate-100 bg-transparent hover:bg-slate-800',
 }
