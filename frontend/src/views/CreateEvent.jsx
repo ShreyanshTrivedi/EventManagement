@@ -3,6 +3,8 @@ import { showToast } from '../lib/toast'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import api from '../lib/api'
+import Card from '../ui/Card'
+import Button from '../ui/Button'
 
 const FIELD_OPTIONS = [
   { key: 'full_name', label: 'Full Name' },
@@ -90,82 +92,122 @@ export default function CreateEvent() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-[900px] mx-auto">
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Create Event</h1>
-          <p className="text-slate-600">Provide event details and choose registration fields for attendees.</p>
+          <h1 className="text-2xl font-semibold text-[#E5E7EB]">Create Event</h1>
+          <p className="text-sm text-[#9CA3AF]">Provide event details and choose registration fields for attendees.</p>
         </div>
-        <button type="button" className="btn btn-secondary" onClick={() => navigate('/events')}>Back</button>
+        <Button type="button" variant="secondary" onClick={() => navigate('/events')}>Back</Button>
       </div>
 
       {!allowed ? (
         <div className="alert alert-error">You are not authorized to create events.</div>
       ) : (
-        <div className="card">
-          <form onSubmit={onSubmit} className="space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
-              <div className="text-sm font-semibold text-slate-900">Event details</div>
-              <div className="mt-1 text-sm text-slate-600">Title, description, location and schedule.</div>
+        <Card className="p-8">
+          <form onSubmit={onSubmit} className="space-y-8">
+            <Card className="p-6">
+              <div className="text-sm font-semibold text-[#E5E7EB]">Event Details</div>
+              <div className="mt-1 text-sm text-[#9CA3AF]">Title, description, location and schedule.</div>
+              <div className="mt-6 border-t border-[#1F2937]" />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="form-group">
-                <label className="form-label">Event Title</label>
-                <input className="form-input" value={title} onChange={(e)=>setTitle(e.target.value)} required />
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="form-group">
+                  <label className="form-label">Event Title</label>
+                  <input className="form-input" value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="e.g. Hackathon Kickoff" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Location (optional)</label>
+                  <input className="form-input" value={loc} onChange={(e)=>setLoc(e.target.value)} placeholder="e.g. Auditorium A" />
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Location (optional)</label>
-                <input className="form-input" value={loc} onChange={(e)=>setLoc(e.target.value)} placeholder="Defaults to TBD" />
-              </div>
-            </div>
 
-            <div className="form-group">
-              <label className="form-label">Description</label>
-              <textarea className="form-input" rows={4} value={description} onChange={(e)=>setDescription(e.target.value)} />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="form-group">
-                <label className="form-label">Start</label>
-                <input type="datetime-local" className="form-input" value={start} onChange={(e)=>setStart(e.target.value)} required min={getMinDateTimeLocal()} />
+              <div className="mt-5 form-group">
+                <label className="form-label">Description</label>
+                <textarea className="form-input" rows={4} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Optional details attendees should know" />
               </div>
-              <div className="form-group">
-                <label className="form-label">End</label>
-                <input type="datetime-local" className="form-input" value={end} onChange={(e)=>setEnd(e.target.value)} required min={start || getMinDateTimeLocal()} />
-              </div>
-            </div>
 
-            <div className="form-group">
-              <label className="form-label">Club ID (optional)</label>
-              <input className="form-input" value={club} onChange={(e)=>setClub(e.target.value)} placeholder="If empty, uses your club automatically" />
-            </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
-              <div className="text-sm font-semibold text-slate-900">Registration fields</div>
-              <div className="mt-1 text-sm text-slate-600">Choose what attendees must fill during registration.</div>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {FIELD_OPTIONS.map(opt => (
-                  <label key={opt.key} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700">
-                    <input type="checkbox" checked={selected.includes(opt.key)} onChange={()=>toggleField(opt.key)} />
-                    <span>{opt.label}</span>
-                  </label>
-                ))}
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="form-group">
+                  <label className="form-label">Start</label>
+                  <input type="datetime-local" className="form-input" value={start} onChange={(e)=>setStart(e.target.value)} required min={getMinDateTimeLocal()} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">End</label>
+                  <input type="datetime-local" className="form-input" value={end} onChange={(e)=>setEnd(e.target.value)} required min={start || getMinDateTimeLocal()} />
+                </div>
               </div>
-              <p className="text-xs text-slate-500 mt-3">Full Name and Email are preselected by default.</p>
-            </div>
+
+              <div className="mt-5 form-group">
+                <label className="form-label">Club ID (optional)</label>
+                <input className="form-input" value={club} onChange={(e)=>setClub(e.target.value)} placeholder="Leave blank to use your club automatically" />
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="text-sm font-semibold text-[#E5E7EB]">Registration Fields</div>
+              <div className="mt-1 text-sm text-[#9CA3AF]">Choose what attendees must fill during registration.</div>
+              <div className="mt-6 border-t border-[#1F2937]" />
+
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {FIELD_OPTIONS.map(opt => {
+                  const checked = selected.includes(opt.key)
+                  return (
+                    <label
+                      key={opt.key}
+                      className={[
+                        'group cursor-pointer select-none rounded-xl border px-3 py-2.5 transition-all duration-200',
+                        'bg-[#0F172A] border-[#1F2937] hover:border-[#3B82F6]/50 hover:bg-white/5',
+                        checked ? 'ring-1 ring-[#3B82F6]/35 border-[#3B82F6]/60' : ''
+                      ].join(' ')}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span
+                          className={[
+                            'flex h-4 w-4 items-center justify-center rounded-[6px] border transition-all duration-200',
+                            checked ? 'bg-[#3B82F6] border-[#3B82F6]' : 'bg-transparent border-[#374151] group-hover:border-[#3B82F6]/60'
+                          ].join(' ')}
+                          aria-hidden="true"
+                        >
+                          <svg
+                            viewBox="0 0 20 20"
+                            className={checked ? 'h-3 w-3 text-white' : 'h-3 w-3 text-transparent'}
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.6 7.66a1 1 0 0 1-1.42-.002L3.29 9.954a1 1 0 1 1 1.42-1.408l3.28 3.307 6.89-6.94a1 1 0 0 1 1.414-.006Z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </span>
+                        <span className="text-sm text-[#E5E7EB]">{opt.label}</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => toggleField(opt.key)}
+                      />
+                    </label>
+                  )
+                })}
+              </div>
+
+              <p className="text-xs text-[#9CA3AF] mt-4">Full Name and Email are preselected by default.</p>
+            </Card>
 
             {error && <div className="alert alert-error" role="alert" aria-live="assertive">{error}</div>}
             {message && <div className="alert alert-success" role="status" aria-live="polite">{message}</div>}
 
-            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
-              <button type="button" className="btn btn-secondary" onClick={() => navigate('/events')} disabled={loading}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-2">
+              <Button type="button" variant="secondary" onClick={() => navigate('/events')} disabled={loading}>Cancel</Button>
+              <Button type="submit" disabled={loading}>
                 {loading ? 'Creating...' : 'Create Event'}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
     </div>
   )

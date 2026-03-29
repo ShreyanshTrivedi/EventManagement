@@ -31,9 +31,9 @@ export default function Layout({ children }) {
   }, [user, hasRole])
   
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-[#0B0F19] text-[#E5E7EB]">
       {/* Header */}
-      <header className="bg-slate-900/95 backdrop-blur border-b border-slate-800 sticky top-0">
+      <header className="bg-[#0B0F19]/95 backdrop-blur border-b border-[#1F2937] sticky top-0">
         <Container className="py-3">
           <div className="flex items-center justify-between">
             {/* Logo */}
@@ -130,7 +130,7 @@ export default function Layout({ children }) {
       </main>
       
       {/* Footer */}
-      <footer className="bg-slate-900 border-t border-slate-800 mt-12">
+      <footer className="bg-[#0B0F19] border-t border-[#1F2937] mt-12">
         <Container className="py-8">
           <div className="text-center text-slate-400">
             <p>&copy; 2024 EventSphere. Built with React &amp; Spring Boot.</p>
