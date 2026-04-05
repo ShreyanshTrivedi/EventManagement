@@ -23,8 +23,8 @@ export default function Layout({ children }) {
       { to: '/events', label: 'Events', show: true },
       { to: '/bookings', label: 'Bookings', show: !!user && (hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE') || hasRole('ADMIN')) },
       { to: '/enhanced-book-room', label: 'Book Room', show: !!user && (hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE') || hasRole('ADMIN') || hasRole('CENTRAL_ADMIN') || hasRole('BUILDING_ADMIN')) },
-      { to: '/admin/role-requests', label: 'Admin', show: !!user && hasRole('ADMIN') },
-      { to: '/admin/room-approvals', label: 'Room Approvals', show: !!user && (hasRole('ADMIN') || hasRole('CENTRAL_ADMIN') || hasRole('BUILDING_ADMIN')) },
+      { to: '/admin/role-requests', label: 'Admin', show: !!user && (hasRole('ADMIN') || hasRole('CENTRAL_ADMIN')) },
+      { to: '/admin/room-approvals', label: 'Room Approvals', show: !!user && (hasRole('ADMIN') || hasRole('BUILDING_ADMIN')) },
       { to: '/profile', label: 'Profile', show: !!user },
     ]
     return items.filter(i => i.show)

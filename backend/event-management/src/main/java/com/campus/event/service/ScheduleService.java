@@ -20,15 +20,18 @@ public class ScheduleService {
     private final RoomRepository roomRepository;
     private final RoomBookingRequestRepository bookingRepository;
     private final UserRepository userRepository;
-    
+    private final BuildingTimetableService buildingTimetableService;
+
     public ScheduleService(FixedTimetableRepository fixedTimetableRepository,
                          RoomRepository roomRepository,
                          RoomBookingRequestRepository bookingRepository,
-                         UserRepository userRepository) {
+                         UserRepository userRepository,
+                         BuildingTimetableService buildingTimetableService) {
         this.fixedTimetableRepository = fixedTimetableRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
+        this.buildingTimetableService = buildingTimetableService;
     }
     
     // Fixed Timetable operations
@@ -103,6 +106,12 @@ public class ScheduleService {
         List<String> messages = new ArrayList<>();
         Room room = roomRepository.findById(roomId).orElse(null);
         if (room == null) return messages;
+
+        Long buildingId = room.getFloor() != null && room.getFloor().getBuilding() != null
+                ? room.getFloor().getBuilding().getId() : null;
+        if (buildingId != null && !buildingTimetableService.isBookingWithinBuildingHours(buildingId, start, end)) {
+            messages.add("Requested time is outside this building's operating hours (see building timetable).");
+        }
 
         // Check against existing bookings for the whole period
         List<RoomBookingRequest> conflictingBookings = bookingRepository.findConflictingBookings(roomId, start, end);

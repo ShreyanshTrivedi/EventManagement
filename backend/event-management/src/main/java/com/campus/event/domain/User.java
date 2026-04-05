@@ -48,6 +48,10 @@ public class User {
 
     private Long managedBuildingId;
 
+    /** Required for {@link Role#BUILDING_ADMIN}: which room category this admin approves. */
+    @Enumerated(EnumType.STRING)
+    private AdminScope adminScope;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
@@ -76,6 +80,8 @@ public class User {
         public void setFullName(String fullName) { this.fullName = fullName; }
         public Long getManagedBuildingId() { return managedBuildingId; }
         public void setManagedBuildingId(Long managedBuildingId) { this.managedBuildingId = managedBuildingId; }
+        public AdminScope getAdminScope() { return adminScope; }
+        public void setAdminScope(AdminScope adminScope) { this.adminScope = adminScope; }
 }
 
 

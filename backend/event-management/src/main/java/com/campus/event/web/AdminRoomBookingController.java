@@ -1,12 +1,19 @@
 package com.campus.event.web;
 
+import com.campus.event.domain.AdminScope;
+import com.campus.event.domain.Event;
+import com.campus.event.domain.Role;
 import com.campus.event.domain.Room;
 import com.campus.event.domain.RoomBookingRequest;
 import com.campus.event.domain.RoomBookingStatus;
+import com.campus.event.domain.User;
+import com.campus.event.repository.EventRegistrationRepository;
 import com.campus.event.repository.RoomBookingRequestRepository;
 import com.campus.event.repository.RoomRepository;
 import com.campus.event.repository.UserRepository;
 import com.campus.event.service.NotificationService;
+import com.campus.event.service.RoomApprovalRules;
+import com.campus.event.service.ScheduleService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,15 +27,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import com.campus.event.domain.RoomType;
-import com.campus.event.domain.Role;
-import com.campus.event.domain.User;
-import com.campus.event.repository.EventRegistrationRepository;
-
+/**
+ * Room approvals: {@link Role#ADMIN} (full access) and scoped {@link Role#BUILDING_ADMIN}.
+ * {@link Role#CENTRAL_ADMIN} is intentionally excluded — central admin handles roles and club assignment only.
+ */
 @RestController
 @RequestMapping("/api/admin/room-requests")
-@PreAuthorize("hasAnyRole('ADMIN', 'CENTRAL_ADMIN', 'BUILDING_ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'BUILDING_ADMIN')")
 public class AdminRoomBookingController {
 
     private final RoomBookingRequestRepository requestRepo;
@@ -36,12 +43,11 @@ public class AdminRoomBookingController {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final EventRegistrationRepository registrationRepo;
-
-    private final com.campus.event.service.ScheduleService scheduleService;
+    private final ScheduleService scheduleService;
 
     public AdminRoomBookingController(RoomBookingRequestRepository requestRepo, RoomRepository roomRepo,
                                       UserRepository userRepository, NotificationService notificationService,
-                                      com.campus.event.service.ScheduleService scheduleService,
+                                      ScheduleService scheduleService,
                                       EventRegistrationRepository registrationRepo) {
         this.requestRepo = requestRepo;
         this.roomRepo = roomRepo;
@@ -53,95 +59,145 @@ public class AdminRoomBookingController {
 
     @GetMapping
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(@RequestParam(value = "status", required = false) String status, @AuthenticationPrincipal UserDetails principal) {
-        List<RoomBookingRequest> list = status == null ?
-                requestRepo.findAll() :
-                requestRepo.findByStatusOrderByRequestedAtDesc(RoomBookingStatus.valueOf(status));
+    public List<Map<String, Object>> list(@RequestParam(value = "status", required = false) String status,
+                                          @AuthenticationPrincipal UserDetails principal) {
+        List<RoomBookingRequest> list = status == null
+                ? requestRepo.findAll()
+                : requestRepo.findByStatusOrderByRequestedAtDesc(RoomBookingStatus.valueOf(status));
 
         User currentUser = userRepository.findByUsername(principal.getUsername()).orElse(null);
         boolean isSuperAdmin = currentUser != null && currentUser.getRoles().contains(Role.ADMIN);
-        boolean isCentralAdmin = currentUser != null && currentUser.getRoles().contains(Role.CENTRAL_ADMIN);
         boolean isBuildingAdmin = currentUser != null && currentUser.getRoles().contains(Role.BUILDING_ADMIN);
-        Long managedBuildingId = currentUser != null ? currentUser.getManagedBuildingId() : null;
 
         return list.stream()
-            .filter(r -> {
-                if (isSuperAdmin) return true;
-                
-                boolean centralMatch = false;
-                boolean buildingMatch = false;
-                
-                List<Room> prefs = List.of(r.getPref1() != null ? r.getPref1() : new Room(), 
-                                           r.getPref2() != null ? r.getPref2() : new Room(), 
-                                           r.getPref3() != null ? r.getPref3() : new Room());
-                for (Room p : prefs) {
-                    if (p.getType() == RoomType.LECTURE_HALL || p.getType() == RoomType.SEMINAR_HALL || p.getType() == RoomType.AUDITORIUM) {
-                        centralMatch = true;
-                    }
-                    if (p.getFloor() != null && p.getFloor().getBuilding() != null && 
-                        p.getFloor().getBuilding().getId().equals(managedBuildingId)) {
-                        buildingMatch = true;
-                    }
-                }
-                
-                return (isCentralAdmin && centralMatch) || (isBuildingAdmin && buildingMatch);
-            })
-            .map(r -> {
-                Map<String, Object> m = new HashMap<>();
-                m.put("id", r.getId());
-                if (r.getEvent() != null) {
-                    m.put("eventId", r.getEvent().getId());
-                    m.put("eventTitle", r.getEvent().getTitle());
-                    m.put("start", r.getEvent().getStartTime());
-                    m.put("registrationCount", registrationRepo.countByEvent_Id(r.getEvent().getId()));
-                } else {
-                    m.put("eventId", null);
-                    m.put("eventTitle", r.getMeetingPurpose());
-                    m.put("start", r.getMeetingStart());
-                }
-                m.put("status", r.getStatus().name());
-                m.put("pref1", r.getPref1() != null ? r.getPref1().getName() : null);
-                m.put("pref2", r.getPref2() != null ? r.getPref2().getName() : null);
-                m.put("pref3", r.getPref3() != null ? r.getPref3().getName() : null);
-                m.put("allocatedRoom", r.getAllocatedRoom() != null ? r.getAllocatedRoom().getName() : null);
-                m.put("requestedBy", r.getRequestedByUsername());
-                return m;
-            }).collect(Collectors.toList());
+                .filter(r -> isSuperAdmin || (isBuildingAdmin && visibleToBuildingAdmin(r, currentUser)))
+                .map(r -> toDto(r))
+                .collect(Collectors.toList());
     }
 
-    public static class ApproveBody { public Long allocatedRoomId; }
+    private static boolean visibleToBuildingAdmin(RoomBookingRequest r, User admin) {
+        Long bid = admin.getManagedBuildingId();
+        AdminScope scope = admin.getAdminScope();
+        if (bid == null || scope == null) {
+            return false;
+        }
+        if (r.getEvent() != null) {
+            Event ev = r.getEvent();
+            if (ev.getBuilding() == null || !bid.equals(ev.getBuilding().getId())) {
+                return false;
+            }
+        }
+        boolean any = false;
+        for (Room p : List.of(r.getPref1(), r.getPref2(), r.getPref3())) {
+            if (p == null) {
+                continue;
+            }
+            any = true;
+            if (p.getFloor() == null || p.getFloor().getBuilding() == null
+                    || !bid.equals(p.getFloor().getBuilding().getId())) {
+                return false;
+            }
+            if (RoomApprovalRules.scopeForRoom(p) != scope) {
+                return false;
+            }
+        }
+        if (!any) {
+            return false;
+        }
+        if (r.getEvent() == null) {
+            Room ref = Stream.of(r.getPref1(), r.getPref2(), r.getPref3()).filter(x -> x != null).findFirst().orElse(null);
+            if (ref == null) {
+                return false;
+            }
+            if (ref.getFloor() == null || ref.getFloor().getBuilding() == null
+                    || !bid.equals(ref.getFloor().getBuilding().getId())) {
+                return false;
+            }
+            return RoomApprovalRules.scopeForRoom(ref) == scope;
+        }
+        return true;
+    }
+
+    private Map<String, Object> toDto(RoomBookingRequest r) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", r.getId());
+        if (r.getEvent() != null) {
+            Event ev = r.getEvent();
+            m.put("eventId", ev.getId());
+            m.put("eventTitle", ev.getTitle());
+            m.put("start", ev.getStartTime());
+            m.put("registrationCount", registrationRepo.countByEvent_Id(ev.getId()));
+            if (ev.getBuilding() != null) {
+                m.put("buildingId", ev.getBuilding().getId());
+                m.put("buildingName", ev.getBuilding().getName());
+            }
+        } else {
+            m.put("eventId", null);
+            m.put("eventTitle", r.getMeetingPurpose());
+            m.put("start", r.getMeetingStart());
+            Room ref = r.getPref1();
+            if (ref != null && ref.getFloor() != null && ref.getFloor().getBuilding() != null) {
+                m.put("buildingId", ref.getFloor().getBuilding().getId());
+                m.put("buildingName", ref.getFloor().getBuilding().getName());
+            }
+        }
+        m.put("status", r.getStatus().name());
+        m.put("pref1", r.getPref1() != null ? r.getPref1().getName() : null);
+        m.put("pref2", r.getPref2() != null ? r.getPref2().getName() : null);
+        m.put("pref3", r.getPref3() != null ? r.getPref3().getName() : null);
+        m.put("pref1RoomType", r.getPref1() != null && r.getPref1().getType() != null ? r.getPref1().getType().name() : null);
+        m.put("approvalScope", r.getPref1() != null ? RoomApprovalRules.scopeForRoom(r.getPref1()).name() : null);
+        m.put("allocatedRoom", r.getAllocatedRoom() != null ? r.getAllocatedRoom().getName() : null);
+        m.put("requestedBy", r.getRequestedByUsername());
+        if (r.getSplitGroupId() != null) {
+            m.put("splitGroupId", r.getSplitGroupId().toString());
+            m.put("splitPart", Boolean.TRUE);
+        } else {
+            m.put("splitPart", Boolean.FALSE);
+        }
+        return m;
+    }
+
+    public static class ApproveBody {
+        public Long allocatedRoomId;
+    }
 
     @PostMapping("/{id}/approve")
+    @Transactional
     public ResponseEntity<?> approve(@PathVariable Long id, @RequestBody ApproveBody body,
                                      @AuthenticationPrincipal UserDetails principal) {
         RoomBookingRequest req = requestRepo.findById(id).orElse(null);
-        if (req == null) return ResponseEntity.notFound().build();
-        if (body == null || body.allocatedRoomId == null) return ResponseEntity.badRequest().body("allocatedRoomId required");
+        if (req == null) {
+            return ResponseEntity.notFound().build();
+        }
+        if (body == null || body.allocatedRoomId == null) {
+            return ResponseEntity.badRequest().body("allocatedRoomId required");
+        }
         Room alloc = roomRepo.findById(body.allocatedRoomId).orElse(null);
-        if (alloc == null) return ResponseEntity.badRequest().body("Room not found");
+        if (alloc == null) {
+            return ResponseEntity.badRequest().body("Room not found");
+        }
 
         User currentUser = userRepository.findByUsername(principal.getUsername()).orElse(null);
         boolean isSuperAdmin = currentUser != null && currentUser.getRoles().contains(Role.ADMIN);
-        boolean isCentralAdmin = currentUser != null && currentUser.getRoles().contains(Role.CENTRAL_ADMIN);
         boolean isBuildingAdmin = currentUser != null && currentUser.getRoles().contains(Role.BUILDING_ADMIN);
-        Long managedBuildingId = currentUser != null ? currentUser.getManagedBuildingId() : null;
 
         if (!isSuperAdmin) {
-            boolean allocIsCentral = alloc.getType() == RoomType.LECTURE_HALL || alloc.getType() == RoomType.SEMINAR_HALL || alloc.getType() == RoomType.AUDITORIUM;
-            boolean allocIsInBuilding = alloc.getFloor() != null && alloc.getFloor().getBuilding() != null && alloc.getFloor().getBuilding().getId().equals(managedBuildingId);
-
-            if (isCentralAdmin && !allocIsCentral && !isBuildingAdmin) {
-                return ResponseEntity.status(403).body("CENTRAL_ADMIN can only allocate large halls.");
+            if (!isBuildingAdmin || !visibleToBuildingAdmin(req, currentUser)) {
+                return ResponseEntity.status(403).body("Not allowed to approve this request");
             }
-            if (isBuildingAdmin && !allocIsInBuilding && !isCentralAdmin) {
-                return ResponseEntity.status(403).body("BUILDING_ADMIN can only allocate rooms in their assigned building.");
+            if (currentUser.getManagedBuildingId() == null || currentUser.getAdminScope() == null) {
+                return ResponseEntity.status(403).body("Building admin must have managedBuildingId and adminScope");
             }
-            if (isBuildingAdmin && allocIsInBuilding && allocIsCentral && !isCentralAdmin) {
-                return ResponseEntity.status(403).body("BUILDING_ADMIN cannot allocate large halls, even in their building. Central Admin handles these.");
+            if (alloc.getFloor() == null || alloc.getFloor().getBuilding() == null
+                    || !currentUser.getManagedBuildingId().equals(alloc.getFloor().getBuilding().getId())) {
+                return ResponseEntity.status(403).body("Allocated room must be in your building");
+            }
+            if (currentUser.getAdminScope() != RoomApprovalRules.scopeForRoom(alloc)) {
+                return ResponseEntity.status(403).body("Allocated room type does not match your admin scope");
             }
         }
 
-        // Prevent double-booking: check for overlapping approved/confirmed bookings for this room
         LocalDateTime reqStart;
         LocalDateTime reqEnd;
         if (req.getEvent() != null && req.getEvent().getStartTime() != null && req.getEvent().getEndTime() != null) {
@@ -178,11 +234,14 @@ public class AdminRoomBookingController {
                 return ResponseEntity.badRequest().body("Room is already booked in the requested time window");
             }
         }
+
         req.setAllocatedRoom(alloc);
         req.setStatus(RoomBookingStatus.APPROVED);
         req.setApprovedAt(LocalDateTime.now());
         req.setApprovedByUsername(principal.getUsername());
         requestRepo.save(req);
+        rejectSplitSiblings(req);
+
         if (req.getRequestedByUsername() != null) {
             userRepository.findByUsername(req.getRequestedByUsername()).ifPresent(u -> {
                 String subj = "Room request approved";
@@ -193,12 +252,45 @@ public class AdminRoomBookingController {
         return ResponseEntity.ok("Approved");
     }
 
+    private void rejectSplitSiblings(RoomBookingRequest approved) {
+        if (approved.getSplitGroupId() == null) {
+            return;
+        }
+        requestRepo.findBySplitGroupId(approved.getSplitGroupId()).stream()
+                .filter(x -> !x.getId().equals(approved.getId()))
+                .filter(x -> x.getStatus() == RoomBookingStatus.PENDING)
+                .forEach(x -> {
+                    x.setStatus(RoomBookingStatus.REJECTED);
+                    requestRepo.save(x);
+                });
+    }
+
     @PostMapping("/{id}/reject")
-    public ResponseEntity<?> reject(@PathVariable Long id) {
+    @Transactional
+    public ResponseEntity<?> reject(@PathVariable Long id, @AuthenticationPrincipal UserDetails principal) {
         RoomBookingRequest req = requestRepo.findById(id).orElse(null);
-        if (req == null) return ResponseEntity.notFound().build();
-        req.setStatus(RoomBookingStatus.REJECTED);
-        requestRepo.save(req);
+        if (req == null) {
+            return ResponseEntity.notFound().build();
+        }
+        User currentUser = userRepository.findByUsername(principal.getUsername()).orElse(null);
+        boolean isSuperAdmin = currentUser != null && currentUser.getRoles().contains(Role.ADMIN);
+        boolean isBuildingAdmin = currentUser != null && currentUser.getRoles().contains(Role.BUILDING_ADMIN);
+        if (!isSuperAdmin && (!isBuildingAdmin || !visibleToBuildingAdmin(req, currentUser))) {
+            return ResponseEntity.status(403).body("Not allowed to reject this request");
+        }
+
+        if (req.getSplitGroupId() != null) {
+            requestRepo.findBySplitGroupId(req.getSplitGroupId()).stream()
+                    .filter(x -> x.getStatus() == RoomBookingStatus.PENDING)
+                    .forEach(x -> {
+                        x.setStatus(RoomBookingStatus.REJECTED);
+                        requestRepo.save(x);
+                    });
+        } else {
+            req.setStatus(RoomBookingStatus.REJECTED);
+            requestRepo.save(req);
+        }
+
         if (req.getRequestedByUsername() != null) {
             userRepository.findByUsername(req.getRequestedByUsername()).ifPresent(u -> {
                 String subj = "Room request rejected";
@@ -210,20 +302,31 @@ public class AdminRoomBookingController {
     }
 
     @GetMapping("/{id}/conflicts")
-    public ResponseEntity<?> getConflicts(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getConflicts(@PathVariable Long id, @AuthenticationPrincipal UserDetails principal) {
         RoomBookingRequest req = requestRepo.findById(id).orElse(null);
-        if (req == null) return ResponseEntity.notFound().build();
-        
+        if (req == null) {
+            return ResponseEntity.notFound().build();
+        }
+        User currentUser = userRepository.findByUsername(principal.getUsername()).orElse(null);
+        boolean isSuperAdmin = currentUser != null && currentUser.getRoles().contains(Role.ADMIN);
+        boolean isBuildingAdmin = currentUser != null && currentUser.getRoles().contains(Role.BUILDING_ADMIN);
+        if (!isSuperAdmin && (!isBuildingAdmin || !visibleToBuildingAdmin(req, currentUser))) {
+            return ResponseEntity.status(403).build();
+        }
+
         LocalDateTime start = req.getEvent() != null ? req.getEvent().getStartTime() : req.getMeetingStart();
         LocalDateTime end = req.getEvent() != null ? req.getEvent().getEndTime() : req.getMeetingEnd();
-        
-        if (start == null || end == null) return ResponseEntity.ok(Map.of());
+
+        if (start == null || end == null) {
+            return ResponseEntity.ok(Map.of());
+        }
 
         Map<String, List<String>> conflicts = scheduleService.validateEventRoomPreferences(
-            req.getPref1() != null ? req.getPref1().getId() : null,
-            req.getPref2() != null ? req.getPref2().getId() : null,
-            req.getPref3() != null ? req.getPref3().getId() : null,
-            start, end
+                req.getPref1() != null ? req.getPref1().getId() : null,
+                req.getPref2() != null ? req.getPref2().getId() : null,
+                req.getPref3() != null ? req.getPref3().getId() : null,
+                start, end
         );
         return ResponseEntity.ok(conflicts);
     }

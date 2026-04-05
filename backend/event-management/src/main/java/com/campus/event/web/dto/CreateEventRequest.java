@@ -15,6 +15,10 @@ public class CreateEventRequest {
     @NotNull
     @Future
     private LocalDateTime end;
+
+    @NotNull(message = "Building is required. Every event must belong to a building.")
+    private Long buildingId;
+
     private String location; // may be "TBD" initially
     private String clubId;
     private Integer maxAttendees;
@@ -28,6 +32,8 @@ public class CreateEventRequest {
     public void setStart(LocalDateTime start) { this.start = start; }
     public LocalDateTime getEnd() { return end; }
     public void setEnd(LocalDateTime end) { this.end = end; }
+    public Long getBuildingId() { return buildingId; }
+    public void setBuildingId(Long buildingId) { this.buildingId = buildingId; }
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
     public String getClubId() { return clubId; }

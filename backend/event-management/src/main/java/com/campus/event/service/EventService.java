@@ -1,5 +1,6 @@
 package com.campus.event.service;
 
+import com.campus.event.domain.Building;
 import com.campus.event.domain.Event;
 import com.campus.event.domain.EventRegistration;
 import com.campus.event.domain.User;
@@ -35,14 +36,15 @@ public class EventService {
     }
 
     public Event createEvent(String title, String description, LocalDateTime start, LocalDateTime end,
-                              User creator, String location, String clubId, String registrationSchema,
-                              Integer maxAttendees) {
+                              User creator, Building building, String location, String clubId,
+                              String registrationSchema, Integer maxAttendees) {
         Event event = new Event();
         event.setTitle(title);
         event.setDescription(description);
         event.setStartTime(start);
         event.setEndTime(end);
         event.setCreatedBy(creator);
+        event.setBuilding(building);
         event.setPublic(true);
         event.setLocation(location != null && !location.isBlank() ? location : "TBD");
         if (clubId != null && !clubId.isBlank()) event.setClubId(clubId);

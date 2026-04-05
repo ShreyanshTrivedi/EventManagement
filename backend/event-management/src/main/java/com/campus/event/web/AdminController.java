@@ -21,7 +21,7 @@ public class AdminController {
     }
 
     @GetMapping("/role-requests")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CENTRAL_ADMIN')")
     public ResponseEntity<List<Map<String, Object>>> listRoleRequests() {
         List<Map<String, Object>> body = userRepository.findByRequestedRoleIsNotNull().stream()
                 .map(u -> {
@@ -37,7 +37,7 @@ public class AdminController {
     }
 
     @PostMapping("/role-requests/{userId}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CENTRAL_ADMIN')")
     public ResponseEntity<?> approve(@PathVariable Long userId) {
         return userRepository.findById(userId)
                 .map(user -> {
@@ -53,7 +53,7 @@ public class AdminController {
     }
 
     @PostMapping("/role-requests/{userId}/reject")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CENTRAL_ADMIN')")
     public ResponseEntity<?> reject(@PathVariable Long userId) {
         return userRepository.findById(userId)
                 .map(user -> {
@@ -70,7 +70,7 @@ public class AdminController {
     public static class SetClubBody { public String clubId; }
 
     @PostMapping("/users/{userId}/club")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CENTRAL_ADMIN')")
     public ResponseEntity<?> setUserClub(@PathVariable Long userId, @RequestBody SetClubBody body) {
         return userRepository.findById(userId)
                 .map(user -> {

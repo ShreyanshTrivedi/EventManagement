@@ -18,7 +18,6 @@ public class Event {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-        public Long getId() { return id; }
 
     @NotBlank
     private String title;
@@ -42,6 +41,11 @@ public class Event {
     @JoinColumn(name = "created_by_id")
     private User createdBy;
 
+    @NotNull
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "building_id", nullable = false)
+    private Building building;
+
     private String location;
 
     private String clubId;
@@ -50,27 +54,29 @@ public class Event {
 
     @Column(columnDefinition = "TEXT")
     private String registrationSchema; // JSON array of field keys
-        // Explicit getters and setters
-        public String getTitle() { return title; }
-        public void setTitle(String title) { this.title = title; }
-        public String getDescription() { return description; }
-        public void setDescription(String description) { this.description = description; }
-        public LocalDateTime getStartTime() { return startTime; }
-        public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
-        public LocalDateTime getEndTime() { return endTime; }
-        public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
-        public boolean isPublic() { return isPublic; }
-        public void setPublic(boolean isPublic) { this.isPublic = isPublic; }
-        public User getCreatedBy() { return createdBy; }
-        public void setCreatedBy(User createdBy) { this.createdBy = createdBy; }
-        public String getLocation() { return location; }
-        public void setLocation(String location) { this.location = location; }
-        public String getClubId() { return clubId; }
-        public void setClubId(String clubId) { this.clubId = clubId; }
-        public Integer getMaxAttendees() { return maxAttendees; }
-        public void setMaxAttendees(Integer maxAttendees) { this.maxAttendees = maxAttendees; }
-        public String getRegistrationSchema() { return registrationSchema; }
-        public void setRegistrationSchema(String registrationSchema) { this.registrationSchema = registrationSchema; }
+
+    // Explicit getters and setters
+    public Long getId() { return id; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public LocalDateTime getStartTime() { return startTime; }
+    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
+    public LocalDateTime getEndTime() { return endTime; }
+    public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+    public boolean isPublic() { return isPublic; }
+    public void setPublic(boolean isPublic) { this.isPublic = isPublic; }
+    public User getCreatedBy() { return createdBy; }
+    public void setCreatedBy(User createdBy) { this.createdBy = createdBy; }
+    public Building getBuilding() { return building; }
+    public void setBuilding(Building building) { this.building = building; }
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
+    public String getClubId() { return clubId; }
+    public void setClubId(String clubId) { this.clubId = clubId; }
+    public Integer getMaxAttendees() { return maxAttendees; }
+    public void setMaxAttendees(Integer maxAttendees) { this.maxAttendees = maxAttendees; }
+    public String getRegistrationSchema() { return registrationSchema; }
+    public void setRegistrationSchema(String registrationSchema) { this.registrationSchema = registrationSchema; }
 }
-
-

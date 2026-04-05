@@ -36,7 +36,7 @@ export default function AdminRoleRequests() {
     }
   }
 
-  if (!hasRole('ADMIN')) return null
+  if (!hasRole('ADMIN') && !hasRole('CENTRAL_ADMIN')) return null
 
   return (
     <div>

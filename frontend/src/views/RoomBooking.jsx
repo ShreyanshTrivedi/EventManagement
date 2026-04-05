@@ -13,6 +13,7 @@ export default function RoomBooking() {
   const [roomsError, setRoomsError] = useState('')
   const [buildings, setBuildings] = useState([])
   const [selectedBuildingId, setSelectedBuildingId] = useState('')
+  const [buildingError, setBuildingError] = useState('')
   const [events, setEvents] = useState([])
   const [eventsLoading, setEventsLoading] = useState(false)
   const [eventsError, setEventsError] = useState('')
@@ -297,6 +298,14 @@ export default function RoomBooking() {
     setLoading(true)
     
     try {
+      if (!selectedBuildingId) {
+        setBuildingError('Please select a building')
+        setMessage('')
+        showToast({ message: 'Please select a building', type: 'error' })
+        return
+      }
+      setBuildingError('')
+
       if (isFaculty) {
         if (!pref1) {
           setMessage('Please select a room')
@@ -304,13 +313,15 @@ export default function RoomBooking() {
           return
         }
         let payload
+        const buildingId = Number(selectedBuildingId)
         if (mode === 'event') {
           if (!eventId) { setMessage('Please select an event'); return }
-          payload = { eventId: Number(eventId), roomId: Number(pref1) }
+          payload = { eventId: Number(eventId), roomId: Number(pref1), buildingId }
         } else {
           if (!meetingStart || !meetingEnd || !meetingPurpose) { setMessage('Please provide meeting start, end, and purpose'); return }
           payload = {
             roomId: Number(pref1),
+            buildingId,
             start: toLocalDateTimeSeconds(meetingStart),
             end: toLocalDateTimeSeconds(meetingEnd),
             purpose: meetingPurpose
@@ -340,6 +351,7 @@ export default function RoomBooking() {
           if (!eventId) { setMessage('Please select an event'); return }
 
           const payload = {
+            buildingId: Number(selectedBuildingId),
             pref1RoomId: Number(pref1),
             pref2RoomId: Number(pref2),
             pref3RoomId: Number(pref3),
@@ -364,6 +376,7 @@ export default function RoomBooking() {
 
           const payload = {
             roomId: Number(pref1),
+            buildingId: Number(selectedBuildingId),
             purpose: meetingPurpose,
             meetingStart: toLocalDateTimeSeconds(meetingStart),
             meetingEnd: toLocalDateTimeSeconds(meetingEnd)
@@ -392,12 +405,14 @@ export default function RoomBooking() {
     }
   }
 
-  const filteredRooms = selectedBuildingId ? rooms.filter(r => String(r.buildingId) === String(selectedBuildingId)) : rooms;
+  const filteredRooms = selectedBuildingId
+    ? rooms.filter(r => String(r.buildingId) === String(selectedBuildingId))
+    : []
   const selectedRoomInfo = rooms.find(room => room.id === Number(pref1))
 
   const isErrorMessage = (m) => {
     if (!m) return false
-    return /(failed|error|not available|please select|invalid)/i.test(String(m))
+    return /(failed|error|not available|please select|invalid|building)/i.test(String(m))
   }
 
   return (
@@ -467,6 +482,47 @@ export default function RoomBooking() {
                   </div>
                 </div>
               )}
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="room-booking-building">
+                  Select Building <span className="text-red-500 font-semibold" aria-hidden="true">*</span>
+                </label>
+                <select
+                  id="room-booking-building"
+                  className={`form-select ${buildingError ? 'border-red-500/60 ring-1 ring-red-500/40' : ''}`}
+                  value={selectedBuildingId}
+                  required
+                  aria-required="true"
+                  aria-invalid={!!buildingError}
+                  aria-describedby={buildingError ? 'building-error' : 'building-hint'}
+                  onChange={(e) => {
+                    setSelectedBuildingId(e.target.value)
+                    setBuildingError('')
+                    setPref1('')
+                    setPref2('')
+                    setPref3('')
+                    setMessage('')
+                  }}
+                >
+                  <option value="" disabled>
+                    Choose a building...
+                  </option>
+                  {buildings.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+                {buildingError ? (
+                  <p id="building-error" className="text-sm text-red-400 mt-1" role="alert">{buildingError}</p>
+                ) : (
+                  <p id="building-hint" className="text-xs text-[#9CA3AF] mt-1">
+                    Choose a campus building before selecting rooms.
+                  </p>
+                )}
+                {buildings.length === 0 && !roomsLoading && !roomsError && (
+                  <p className="text-xs text-amber-400 mt-1">No buildings loaded. Use Reload data above or check the backend.</p>
+                )}
+              </div>
+
               {mode === 'event' && (!eventId || !Number(pref1)) && (
                 <div className="text-xs text-gray-500">
                   Select an event and a room to see fixed-slot availability.
@@ -598,29 +654,13 @@ export default function RoomBooking() {
                 </>
               )}
 
-              <div className="form-group">
-                <label className="form-label">Building Filter (Optional)</label>
-                <select
-                  className="form-select"
-                  value={selectedBuildingId}
-                  onChange={(e) => {
-                    setSelectedBuildingId(e.target.value);
-                    setPref1(''); setPref2(''); setPref3('');
-                  }}
-                >
-                  <option value="">All Buildings</option>
-                  {buildings.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-
               <div className={`grid grid-cols-1 ${isFaculty || mode === 'meeting' ? 'md:grid-cols-1' : 'md:grid-cols-3'} gap-4`}>
                 <div className="form-group">
                   <label className="form-label">{isFaculty ? 'Select Room' : 'Preference 1'}</label>
                   <select
                     className="form-select"
                     value={pref1}
+                    disabled={!selectedBuildingId}
                     onChange={(e)=>{
                       const v = e.target.value
                       setPref1(v)
@@ -629,7 +669,7 @@ export default function RoomBooking() {
                     }}
                     required
                   >
-                    <option value="">Choose a room...</option>
+                    <option value="">{selectedBuildingId ? 'Choose a room...' : 'Select a building first...'}</option>
                     {filteredRooms.map(room => {
                       const ok = roomWindowAvailability[Number(room.id)]
                       const hasWindow = Object.keys(roomWindowAvailability).length > 0
@@ -642,6 +682,11 @@ export default function RoomBooking() {
                       )
                     })}
                   </select>
+                  {selectedBuildingId && filteredRooms.length === 0 && !roomsLoading && !roomsError && (
+                    <div className="text-xs text-amber-400 mt-1">
+                      No rooms found for this building.
+                    </div>
+                  )}
                   {rooms.length === 0 && !roomsLoading && !roomsError && (
                     <div className="text-xs text-gray-500 mt-1">
                       No rooms loaded. Use “Reload data” above or check backend is running.
@@ -659,10 +704,11 @@ export default function RoomBooking() {
                       <select
                         className="form-select"
                         value={pref2}
+                        disabled={!selectedBuildingId}
                         onChange={(e)=>setPref2(e.target.value)}
                         required
                       >
-                        <option value="">Choose a room...</option>
+                        <option value="">{selectedBuildingId ? 'Choose a room...' : 'Select a building first...'}</option>
                         {filteredRooms.map(room => {
                           const ok = roomWindowAvailability[Number(room.id)]
                           const hasWindow = Object.keys(roomWindowAvailability).length > 0
@@ -682,10 +728,11 @@ export default function RoomBooking() {
                       <select
                         className="form-select"
                         value={pref3}
+                        disabled={!selectedBuildingId}
                         onChange={(e)=>setPref3(e.target.value)}
                         required
                       >
-                        <option value="">Choose a room...</option>
+                        <option value="">{selectedBuildingId ? 'Choose a room...' : 'Select a building first...'}</option>
                         {filteredRooms.map(room => {
                           const ok = roomWindowAvailability[Number(room.id)]
                           const hasWindow = Object.keys(roomWindowAvailability).length > 0
@@ -763,7 +810,11 @@ export default function RoomBooking() {
             {!Number(pref1) ? (
               <div className="text-center py-6">
                 <div className="text-3xl mb-3">🏢</div>
-                <p className="text-sm text-[#9CA3AF]">Select a room preference to see details.</p>
+                <p className="text-sm text-[#9CA3AF]">
+                  {!selectedBuildingId
+                    ? 'Choose a building, then select a room to see details here.'
+                    : 'Select a room to see details.'}
+                </p>
               </div>
             ) : !selectedRoomInfo ? (
               <div className="text-sm text-[#9CA3AF]">Room details unavailable.</div>

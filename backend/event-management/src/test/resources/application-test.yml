@@ -12,6 +12,8 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: false
     open-in-view: false
+  flyway:
+    enabled: false
   mail:
     host: localhost
     port: 25

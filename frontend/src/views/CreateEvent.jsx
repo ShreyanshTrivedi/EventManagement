@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { showToast } from '../lib/toast'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
@@ -32,9 +32,17 @@ export default function CreateEvent() {
   const [club, setClub] = useState(clubId || '')
   const [selected, setSelected] = useState(['full_name', 'email'])
   const [maxAttendees, setMaxAttendees] = useState('')
+  const [buildingId, setBuildingId] = useState('')
+  const [buildings, setBuildings] = useState([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    api.get('/api/public/buildings')
+      .then(res => setBuildings(res.data || []))
+      .catch(() => setBuildings([]))
+  }, [])
 
   const getMinDate = () => {
     const now = new Date()
@@ -43,7 +51,7 @@ export default function CreateEvent() {
   }
 
   const allowed = hasRole('ADMIN') || hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE') || hasRole('CENTRAL_ADMIN') || hasRole('BUILDING_ADMIN')
-  const isFormValid = title.trim() && startDate && startTime && endDate && endTime
+  const isFormValid = title.trim() && startDate && startTime && endDate && endTime && buildingId
 
   const toggleField = (key) => {
     setSelected((prev) => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
@@ -52,6 +60,7 @@ export default function CreateEvent() {
   const onSubmit = async (e) => {
     e.preventDefault()
     if (!allowed) { setError('Not authorized') ; return }
+    if (!buildingId) { setError('Please select a building'); return }
     setError('')
     setMessage('')
     try {
@@ -76,6 +85,7 @@ export default function CreateEvent() {
         description: description.trim(),
         start: startValue,
         end: endValue,
+        buildingId: Number(buildingId),
         location: loc.trim() || undefined,
         clubId: club || undefined,
         maxAttendees: maxAttendees ? Number(maxAttendees) : undefined,
@@ -90,7 +100,9 @@ export default function CreateEvent() {
         showToast({ message: 'Failed to create event', type: 'error' })
       }
     } catch (err) {
-      setError(err.response?.data || 'Failed to create event')
+      const errData = err.response?.data
+      const errMsg = typeof errData === 'object' ? (errData.details || errData.error || 'Failed to create event') : (errData || 'Failed to create event')
+      setError(errMsg)
     } finally {
       setLoading(false)
     }
@@ -113,7 +125,7 @@ export default function CreateEvent() {
           <form onSubmit={onSubmit} className="space-y-8">
             <Card className="p-6">
               <div className="text-sm font-semibold text-[#E5E7EB]">Event Details</div>
-              <div className="mt-1 text-sm text-[#9CA3AF]">Title, description, location and schedule.</div>
+              <div className="mt-1 text-sm text-[#9CA3AF]">Title, description, building, location and schedule.</div>
               <div className="mt-6 border-t border-[#1F2937]" />
 
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -122,8 +134,31 @@ export default function CreateEvent() {
                   <input className="form-input" value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="e.g. Hackathon Kickoff" required />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">
+                    Building <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    className="form-input"
+                    value={buildingId}
+                    onChange={(e) => setBuildingId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select a building...</option>
+                    {buildings.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="form-group">
                   <label className="form-label">Location (optional)</label>
                   <input className="form-input" value={loc} onChange={(e)=>setLoc(e.target.value)} placeholder="e.g. Auditorium A" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Club ID (optional)</label>
+                  <input className="form-input" value={club} onChange={(e)=>setClub(e.target.value)} placeholder="Leave blank to use your club automatically" />
                 </div>
               </div>
 
@@ -166,11 +201,6 @@ export default function CreateEvent() {
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="mt-5 form-group">
-                <label className="form-label">Club ID (optional)</label>
-                <input className="form-input" value={club} onChange={(e)=>setClub(e.target.value)} placeholder="Leave blank to use your club automatically" />
               </div>
 
               <div className="mt-5 form-group">
@@ -244,7 +274,7 @@ export default function CreateEvent() {
 
             <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-2">
               <Button type="button" variant="secondary" onClick={() => navigate('/events')} disabled={loading}>Cancel</Button>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || !isFormValid}>
                 {loading ? 'Creating...' : 'Create Event'}
               </Button>
             </div>

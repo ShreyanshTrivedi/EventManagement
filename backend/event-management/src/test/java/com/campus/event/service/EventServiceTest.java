@@ -1,8 +1,12 @@
 package com.campus.event.service;
 
+import com.campus.event.domain.Building;
 import com.campus.event.domain.Event;
 import com.campus.event.domain.User;
+import com.campus.event.testsupport.TestBuildings;
+import com.campus.event.repository.EventRegistrationRepository;
 import com.campus.event.repository.EventRepository;
+import com.campus.event.repository.RegistrationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,10 +28,20 @@ class EventServiceTest {
     @Mock
     private EventRepository eventRepository;
 
+    @Mock
+    private EventRegistrationRepository eventRegistrationRepository;
+
+    @Mock
+    private RegistrationRepository registrationRepository;
+
+    @Mock
+    private NotificationService notificationService;
+
     @InjectMocks
     private EventService eventService;
 
     private User creator;
+    private Building testBuilding;
 
     @BeforeEach
     void setUp() {
@@ -35,6 +49,8 @@ class EventServiceTest {
         creator.setUsername("faculty1");
         creator.setEmail("faculty1@example.com");
         creator.setClubId("CS_CLUB");
+
+        testBuilding = TestBuildings.defaultBuilding();
     }
 
     @Test
@@ -44,7 +60,7 @@ class EventServiceTest {
         when(eventRepository.save(any(Event.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Event result = eventService.createEvent("Tech Talk", "A description", start, end,
-                creator, "Room 101", "CS_CLUB", "[\"name\",\"email\"]", null);
+                creator, testBuilding, "Room 101", "CS_CLUB", "[\"name\",\"email\"]", null);
 
         ArgumentCaptor<Event> captor = ArgumentCaptor.forClass(Event.class);
         verify(eventRepository).save(captor.capture());
@@ -55,6 +71,7 @@ class EventServiceTest {
         assertEquals(start, saved.getStartTime());
         assertEquals(end, saved.getEndTime());
         assertEquals(creator, saved.getCreatedBy());
+        assertEquals(testBuilding, saved.getBuilding());
         assertEquals("Room 101", saved.getLocation());
         assertEquals("CS_CLUB", saved.getClubId());
         assertEquals("[\"name\",\"email\"]", saved.getRegistrationSchema());
@@ -67,9 +84,10 @@ class EventServiceTest {
 
         Event result = eventService.createEvent("Event", "Desc",
                 LocalDateTime.now().plusDays(3), LocalDateTime.now().plusDays(3).plusHours(1),
-                creator, null, null, null, null);
+                creator, testBuilding, null, null, null, null);
 
         assertEquals("TBD", result.getLocation());
+        assertEquals(testBuilding, result.getBuilding());
     }
 
     @Test
@@ -78,9 +96,10 @@ class EventServiceTest {
 
         Event result = eventService.createEvent("Event", "Desc",
                 LocalDateTime.now().plusDays(3), LocalDateTime.now().plusDays(3).plusHours(1),
-                creator, "   ", null, null, null);
+                creator, testBuilding, "   ", null, null, null);
 
         assertEquals("TBD", result.getLocation());
+        assertEquals(testBuilding, result.getBuilding());
     }
 
     @Test
@@ -89,9 +108,10 @@ class EventServiceTest {
 
         Event result = eventService.createEvent("Event", "Desc",
                 LocalDateTime.now().plusDays(3), LocalDateTime.now().plusDays(3).plusHours(1),
-                creator, "Room A", null, null, null);
+                creator, testBuilding, "Room A", null, null, null);
 
         assertEquals("CS_CLUB", result.getClubId());
+        assertEquals(testBuilding, result.getBuilding());
     }
 
     @Test

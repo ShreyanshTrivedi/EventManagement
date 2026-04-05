@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Repository
 public interface RoomBookingRequestRepository extends JpaRepository<RoomBookingRequest, Long> {
@@ -39,4 +40,6 @@ public interface RoomBookingRequestRepository extends JpaRepository<RoomBookingR
     
     @Query("SELECT rbr FROM RoomBookingRequest rbr WHERE rbr.status = 'APPROVED' AND rbr.approvedAt <= :cutoff")
     List<RoomBookingRequest> findApprovedToConfirm(@Param("cutoff") LocalDateTime cutoff);
+
+    List<RoomBookingRequest> findBySplitGroupId(UUID splitGroupId);
 }

@@ -32,7 +32,8 @@ export default function Login() {
           const decoded = jwtDecode(res.data.token)
           const roles = Array.isArray(decoded.roles) ? decoded.roles.map(r => String(r).replace(/^ROLE_/, '')) : []
           if (roles.includes('GENERAL_USER')) to = '/'
-          else if (roles.includes('FACULTY') || roles.includes('CLUB_ASSOCIATE') || roles.includes('ADMIN')) to = '/dashboard'
+          else if (roles.includes('FACULTY') || roles.includes('CLUB_ASSOCIATE') || roles.includes('ADMIN')
+              || roles.includes('CENTRAL_ADMIN') || roles.includes('BUILDING_ADMIN')) to = '/dashboard'
         } catch {}
         navigate(to)
       } else if (res.status === 401) {
@@ -142,6 +143,8 @@ export default function Login() {
                 <div><span className="font-medium text-[#E5E7EB]">central_admin</span> / Central@123</div>
                 <div><span className="font-medium text-[#E5E7EB]">ab1_admin</span> / Admin@AB1</div>
                 <div><span className="font-medium text-[#E5E7EB]">ab2_admin</span> / Admin@AB2</div>
+                <div><span className="font-medium text-[#E5E7EB]">building_a_room</span> / RoomA@123</div>
+                <div><span className="font-medium text-[#E5E7EB]">building_b_room</span> / RoomB@123</div>
                 <div><span className="font-medium text-[#E5E7EB]">faculty</span> / Faculty@123</div>
                 <div><span className="font-medium text-[#E5E7EB]">club</span> / Club@123</div>
                 <div><span className="font-medium text-[#E5E7EB]">user</span> / User@123</div>

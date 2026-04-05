@@ -1,7 +1,9 @@
 package com.campus.event.web;
 
+import com.campus.event.domain.Building;
 import com.campus.event.domain.Event;
 import com.campus.event.domain.User;
+import com.campus.event.repository.BuildingRepository;
 import com.campus.event.repository.EventRepository;
 import com.campus.event.repository.UserRepository;
 import com.campus.event.service.EventService;
@@ -26,24 +28,32 @@ public class EventController {
     private final EventService eventService;
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
+    private final BuildingRepository buildingRepository;
     private final EventRegistrationRepository registrationRepository;
     private final NotificationService notificationService;
 
-    public EventController(EventService eventService, UserRepository userRepository, EventRepository eventRepository,
-                           EventRegistrationRepository registrationRepository, NotificationService notificationService) {
+    public EventController(EventService eventService, UserRepository userRepository,
+                           EventRepository eventRepository, BuildingRepository buildingRepository,
+                           EventRegistrationRepository registrationRepository,
+                           NotificationService notificationService) {
         this.eventService = eventService;
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
+        this.buildingRepository = buildingRepository;
         this.registrationRepository = registrationRepository;
         this.notificationService = notificationService;
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE')")
+    @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE','CENTRAL_ADMIN','BUILDING_ADMIN')")
     public ResponseEntity<?> createEvent(
             @Valid @RequestBody CreateEventRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
+        Building building = buildingRepository.findById(request.getBuildingId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Building not found with ID: " + request.getBuildingId()));
+
         User creator = userRepository.findByUsername(principal.getUsername()).orElseGet(() -> {
             User u = new User();
             u.setUsername(principal.getUsername());
@@ -55,6 +65,7 @@ public class EventController {
                 request.getStart(),
                 request.getEnd(),
                 creator,
+                building,
                 request.getLocation(),
                 request.getClubId(),
                 request.getRegistrationSchema(),
@@ -78,13 +89,15 @@ public class EventController {
             m.put("clubId", e.getClubId());
             m.put("registrationSchema", e.getRegistrationSchema());
             m.put("maxAttendees", e.getMaxAttendees());
+            m.put("buildingId", e.getBuilding() != null ? e.getBuilding().getId() : null);
+            m.put("buildingName", e.getBuilding() != null ? e.getBuilding().getName() : null);
             return m;
         }).collect(java.util.stream.Collectors.toList());
         return ResponseEntity.ok(body);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE')")
+    @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE','CENTRAL_ADMIN','BUILDING_ADMIN')")
     public ResponseEntity<?> updateEvent(@PathVariable Long id,
                                          @Valid @RequestBody CreateEventRequest request,
                                          @AuthenticationPrincipal UserDetails principal) {
@@ -97,6 +110,10 @@ public class EventController {
                 return ResponseEntity.badRequest().body("Event cannot be edited within 2 days of start");
             }
 
+            Building building = buildingRepository.findById(request.getBuildingId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Building not found with ID: " + request.getBuildingId()));
+
             String oldTitle = existing.getTitle();
             LocalDateTime oldStart = existing.getStartTime();
             LocalDateTime oldEnd = existing.getEndTime();
@@ -106,6 +123,7 @@ public class EventController {
             existing.setDescription(request.getDescription());
             existing.setStartTime(request.getStart());
             existing.setEndTime(request.getEnd());
+            existing.setBuilding(building);
             existing.setLocation(request.getLocation());
             if (request.getClubId() != null && !request.getClubId().isBlank()) {
                 existing.setClubId(request.getClubId());
@@ -133,13 +151,15 @@ public class EventController {
                 }
             }
             return ResponseEntity.ok("Updated");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE')")
+    @PreAuthorize("hasAnyRole('ADMIN','FACULTY','CLUB_ASSOCIATE','CENTRAL_ADMIN','BUILDING_ADMIN')")
     public ResponseEntity<?> deleteEvent(@PathVariable Long id,
                                           @AuthenticationPrincipal UserDetails principal) {
         try {
