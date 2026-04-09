@@ -145,35 +145,31 @@ public class DataInitializer {
             }
 
             if (events.count() == 0) {
-                // Find the first active building to assign to sample events
-                Building defaultBuilding = buildings.findByCode("BLD_A")
-                        .orElseGet(() -> buildings.findByIsActiveTrue().stream()
-                                .findFirst()
-                                .orElseGet(() -> {
-                                    log.warn("No active buildings found. Creating a default building for seed events.");
-                                    Building b = new Building("Main Building", "MAIN", "Default building for seed data");
-                                    return buildings.save(b);
-                                }));
+                // Use BLD_A for sample events; skip seeding if it doesn't exist yet
+                Building defaultBuilding = buildings.findByCode("BLD_A").orElse(null);
+                if (defaultBuilding == null) {
+                    log.warn("No BLD_A building found — skipping sample event seeding.");
+                } else {
+                    Event e1 = new Event();
+                    e1.setTitle("Orientation Week");
+                    e1.setDescription("Welcome event for new students");
+                    e1.setStartTime(LocalDateTime.now().plusDays(3).withHour(10).withMinute(0));
+                    e1.setEndTime(LocalDateTime.now().plusDays(3).withHour(12).withMinute(0));
+                    e1.setPublic(true);
+                    e1.setBuilding(defaultBuilding);
+                    events.save(e1);
 
-                Event e1 = new Event();
-                e1.setTitle("Orientation Week");
-                e1.setDescription("Welcome event for new students");
-                e1.setStartTime(LocalDateTime.now().plusDays(3).withHour(10).withMinute(0));
-                e1.setEndTime(LocalDateTime.now().plusDays(3).withHour(12).withMinute(0));
-                e1.setPublic(true);
-                e1.setBuilding(defaultBuilding);
-                events.save(e1);
+                    Event e2 = new Event();
+                    e2.setTitle("Tech Talk: Spring Boot Security");
+                    e2.setDescription("Deep dive into JWT and RBAC");
+                    e2.setStartTime(LocalDateTime.now().plusDays(7).withHour(15).withMinute(0));
+                    e2.setEndTime(LocalDateTime.now().plusDays(7).withHour(17).withMinute(0));
+                    e2.setPublic(true);
+                    e2.setBuilding(defaultBuilding);
+                    events.save(e2);
 
-                Event e2 = new Event();
-                e2.setTitle("Tech Talk: Spring Boot Security");
-                e2.setDescription("Deep dive into JWT and RBAC");
-                e2.setStartTime(LocalDateTime.now().plusDays(7).withHour(15).withMinute(0));
-                e2.setEndTime(LocalDateTime.now().plusDays(7).withHour(17).withMinute(0));
-                e2.setPublic(true);
-                e2.setBuilding(defaultBuilding);
-                events.save(e2);
-
-                log.info("Seeded sample events assigned to building: {}", defaultBuilding.getName());
+                    log.info("Seeded sample events assigned to building: {}", defaultBuilding.getName());
+                }
             }
         });
     }
