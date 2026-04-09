@@ -32,7 +32,8 @@ export default function Login() {
           const decoded = jwtDecode(res.data.token)
           const roles = Array.isArray(decoded.roles) ? decoded.roles.map(r => String(r).replace(/^ROLE_/, '')) : []
           if (roles.includes('GENERAL_USER')) to = '/'
-          else if (roles.includes('FACULTY') || roles.includes('CLUB_ASSOCIATE') || roles.includes('ADMIN')) to = '/dashboard'
+          else if (roles.includes('FACULTY') || roles.includes('CLUB_ASSOCIATE') || roles.includes('ADMIN')
+              || roles.includes('CENTRAL_ADMIN') || roles.includes('BUILDING_ADMIN')) to = '/dashboard'
         } catch {}
         navigate(to)
       } else if (res.status === 401) {
@@ -47,7 +48,13 @@ export default function Login() {
       }
     } catch (err) {
       if (err.response) {
-        if (err.response.status === 401) setError('Invalid password. Please try again.')
+        const data = err.response?.data
+        const detail = (data && (data.error || data.message))
+          ? (data.error || data.message)
+          : (typeof data === 'string' ? data : '')
+        if (err.response.status === 401 && /another device/i.test(String(detail))) {
+          setError('Already logged in from another device.')
+        } else if (err.response.status === 401) setError('Invalid password. Please try again.')
         else if (err.response.status === 404) setError('User not found.')
         else setError('Login failed. Please try again.')
       } else {
@@ -104,6 +111,11 @@ export default function Login() {
                   {showPassword ? 'Hide' : 'Show'}
                 </Button>
               </div>
+              <div className="flex justify-end mt-2">
+                <Link to="/forgot-password" className="text-xs text-[#3B82F6] hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
             {error && (
@@ -134,7 +146,11 @@ export default function Login() {
             <div className="rounded-2xl border border-[#1F2937] bg-[#0F172A] p-4">
               <div className="text-xs font-semibold text-[#E5E7EB]">Demo accounts</div>
               <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-[#9CA3AF]">
-                <div><span className="font-medium text-[#E5E7EB]">admin</span> / Admin@123</div>
+                <div><span className="font-medium text-[#E5E7EB]">central_admin</span> / Central@123</div>
+                <div><span className="font-medium text-[#E5E7EB]">ab1_admin</span> / Admin@AB1</div>
+                <div><span className="font-medium text-[#E5E7EB]">ab2_admin</span> / Admin@AB2</div>
+                <div><span className="font-medium text-[#E5E7EB]">building_a_room</span> / RoomA@123</div>
+                <div><span className="font-medium text-[#E5E7EB]">building_b_room</span> / RoomB@123</div>
                 <div><span className="font-medium text-[#E5E7EB]">faculty</span> / Faculty@123</div>
                 <div><span className="font-medium text-[#E5E7EB]">club</span> / Club@123</div>
                 <div><span className="font-medium text-[#E5E7EB]">user</span> / User@123</div>

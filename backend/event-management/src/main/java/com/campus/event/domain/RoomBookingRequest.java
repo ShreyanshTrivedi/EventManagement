@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "room_booking_requests")
@@ -48,7 +49,14 @@ public class RoomBookingRequest {
     private LocalDateTime meetingStart;
     private LocalDateTime meetingEnd;
     private String meetingPurpose;
-    
+
+    /**
+     * When preferences mix LARGE_HALL and NORMAL_ROOM, multiple requests share this id
+     * (see {@link com.campus.event.service.RoomApprovalRules}).
+     */
+    @Column(name = "split_group_id")
+    private UUID splitGroupId;
+
     // Helper methods for schedule management
     public java.time.LocalDate getDate() {
         if (event != null && event.getStartTime() != null) {
@@ -109,4 +117,6 @@ public class RoomBookingRequest {
     public void setMeetingEnd(LocalDateTime meetingEnd) { this.meetingEnd = meetingEnd; }
     public String getMeetingPurpose() { return meetingPurpose; }
     public void setMeetingPurpose(String meetingPurpose) { this.meetingPurpose = meetingPurpose; }
+    public UUID getSplitGroupId() { return splitGroupId; }
+    public void setSplitGroupId(UUID splitGroupId) { this.splitGroupId = splitGroupId; }
 }

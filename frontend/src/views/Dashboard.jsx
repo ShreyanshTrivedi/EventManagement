@@ -10,13 +10,16 @@ export default function Dashboard() {
   const [registrations, setRegistrations] = useState([])
   const [createdEvents, setCreatedEvents] = useState([])
   const [bookings, setBookings] = useState([])
+  const [pendingApprovals, setPendingApprovals] = useState([])
   const [loading, setLoading] = useState(true)
   const [cancellingId, setCancellingId] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
   const navigate = useNavigate()
 
   const isGeneralLike = hasRole('GENERAL_USER') || hasRole('CLUB_ASSOCIATE')
-  const isCreatorRole = hasRole('ADMIN') || hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE')
+  const isCreatorRole = hasRole('ADMIN') || hasRole('BUILDING_ADMIN') || hasRole('CENTRAL_ADMIN') || hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE')
+  const isAdminRole = hasRole('ADMIN') || hasRole('BUILDING_ADMIN') || hasRole('CENTRAL_ADMIN')
+  const isRoomApprovalAdmin = hasRole('ADMIN') || hasRole('BUILDING_ADMIN')
 
   useEffect(() => {
     const calls = []
@@ -37,7 +40,13 @@ export default function Dashboard() {
       calls.push(Promise.resolve({ key: 'bookings', data: [] }))
     }
 
-    Promise.all(calls).then(([regsLegacyRes, regsUserRes, createdRes, bookingsRes]) => {
+    if (isRoomApprovalAdmin) {
+      calls.push(api.get('/api/admin/room-requests?status=PENDING').catch(() => ({ key: 'pending', data: [] })))
+    } else {
+      calls.push(Promise.resolve({ key: 'pending', data: [] }))
+    }
+
+    Promise.all(calls).then(([regsLegacyRes, regsUserRes, createdRes, bookingsRes, pendingRes]) => {
       const legacy = regsLegacyRes.data || []
       const userRegs = regsUserRes.data || []
       const mergedByEventId = new Map()
@@ -55,8 +64,9 @@ export default function Dashboard() {
       setRegistrations(Array.from(mergedByEventId.values()))
       setCreatedEvents(createdRes.data || [])
       setBookings(bookingsRes.data || [])
+      setPendingApprovals(pendingRes?.data || [])
     }).finally(() => setLoading(false))
-  }, [isGeneralLike, isCreatorRole])
+  }, [isGeneralLike, isCreatorRole, isRoomApprovalAdmin])
 
   const now = new Date()
   const upcomingRegs = registrations.filter(e => e.startTime && new Date(e.endTime) >= now)
@@ -78,7 +88,9 @@ export default function Dashboard() {
       setCreatedEvents(prev => prev.filter(ev => ev.id !== eventId))
       showToast({ message: 'Event cancelled successfully', type: 'success' })
     } catch (err) {
-      const msg = err.response?.data || 'Failed to cancel event'
+      const data = err.response?.data
+      const msg = (data && (data.error || data.message)) ? (data.error || data.message)
+        : (typeof data === 'string' ? data : 'Failed to cancel event')
       showToast({ message: msg, type: 'error' })
     } finally {
       setCancellingId(null)
@@ -88,6 +100,7 @@ export default function Dashboard() {
 
   const showRegistered = isGeneralLike
   const showCreatorPanels = isCreatorRole
+  const showAdminPanels = isRoomApprovalAdmin
   const mainGridClass = (showRegistered && showCreatorPanels)
     ? 'grid grid-cols-1 lg:grid-cols-2 gap-6'
     : 'grid grid-cols-1 gap-6'
@@ -101,10 +114,10 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/events')}>Browse Events</button>
-          {(hasRole('FACULTY') || hasRole('CLUB_ASSOCIATE') || hasRole('ADMIN')) && (
+          {isCreatorRole && (
             <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate('/book-room')}>Book Room</button>
           )}
-          {hasRole('ADMIN') && (
+          {hasRole('CENTRAL_ADMIN') && (
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/notifications')}>Broadcast</button>
           )}
         </div>
@@ -147,6 +160,19 @@ export default function Dashboard() {
               </div>
               <div className="h-10 w-10 rounded-lg" style={{ background: 'rgba(245,158,11,0.35)' }}>
                 <div className="h-10 w-10 flex items-center justify-center text-lg">🏢</div>
+              </div>
+            </div>
+          </div>
+        )}
+        {showAdminPanels && (
+          <div className="card">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm text-gray-600">Pending Approvals</div>
+                <div className="text-3xl font-bold text-gray-900 mt-1">{pendingApprovals.length}</div>
+              </div>
+              <div className="h-10 w-10 rounded-lg" style={{ background: 'rgba(239,68,68,0.35)' }}>
+                <div className="h-10 w-10 flex items-center justify-center text-lg">⚠️</div>
               </div>
             </div>
           </div>
@@ -232,8 +258,10 @@ export default function Dashboard() {
               <div className="space-y-4">
                 {createdEvents.map(ev => {
                   const start = ev.startTime ? new Date(ev.startTime) : null
+                  const hasApprovedBooking = !!ev.hasApprovedBooking
                   const editable = start && (start.getTime() - now.getTime()) > 2 * 24 * 60 * 60 * 1000
                   const hasStarted = start && start.getTime() <= now.getTime()
+                  const canCancelEvent = !hasApprovedBooking && !!editable
                   const isCancelling = cancellingId === ev.id
                   const isConfirming = confirmId === ev.id
                   return (
@@ -250,7 +278,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <span className="text-xs px-2 py-1 rounded-full bg-slate-800 text-gray-700">
-                          {editable ? 'Editable' : 'Locked (<2 days)'}
+                          {hasApprovedBooking ? 'Room Allocated' : editable ? 'Editable' : 'Locked (<2 days)'}
                         </span>
                       </div>
                     <div className="text-xs text-gray-500 mt-1">
@@ -310,18 +338,18 @@ export default function Dashboard() {
                             type="button"
                             className="btn btn-sm"
                             style={{
-                              background: hasStarted ? '#374151' : '#7F1D1D',
-                              color: hasStarted ? '#6B7280' : '#FECACA',
+                              background: !canCancelEvent || hasStarted ? '#374151' : '#7F1D1D',
+                              color: !canCancelEvent || hasStarted ? '#6B7280' : '#FECACA',
                               borderRadius: '8px',
                               padding: '6px 12px',
-                              cursor: hasStarted ? 'not-allowed' : 'pointer',
-                              opacity: hasStarted ? 0.6 : 1,
+                              cursor: !canCancelEvent || hasStarted ? 'not-allowed' : 'pointer',
+                              opacity: !canCancelEvent || hasStarted ? 0.6 : 1,
                               transition: 'all 0.2s ease',
                             }}
-                            disabled={hasStarted}
+                            disabled={!canCancelEvent || hasStarted}
                             onClick={() => setConfirmId(ev.id)}
-                            onMouseEnter={(e) => { if (!hasStarted) e.target.style.background = '#991B1B' }}
-                            onMouseLeave={(e) => { if (!hasStarted) e.target.style.background = '#7F1D1D' }}
+                            onMouseEnter={(e) => { if (canCancelEvent && !hasStarted) e.target.style.background = '#991B1B' }}
+                            onMouseLeave={(e) => { if (canCancelEvent && !hasStarted) e.target.style.background = '#7F1D1D' }}
                           >
                             Cancel Event
                           </button>
@@ -395,21 +423,71 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {/* Pending Approvals - only for Admin */}
+        {showAdminPanels && (
+          <div className="card border-l-4 border-rose-600">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-rose-500">Pending Approvals</h2>
+                <div className="text-xs text-gray-500 mt-1">Requires your admin review</div>
+              </div>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/room-approvals')}>Review All</button>
+            </div>
+            {loading ? (
+              <div className="text-gray-500 text-sm">Loading...</div>
+            ) : pendingApprovals.length === 0 ? (
+              <div className="text-gray-500 text-sm">No pending approvals required!</div>
+            ) : (
+              <div className="space-y-4">
+                {pendingApprovals.slice(0, 5).map(b => (
+                  <div key={b.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow" style={{ background: 'rgba(15,23,42,0.9)' }}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-medium text-gray-900">{b.eventTitle || 'Meeting'}</h3>
+                        <p className="text-sm text-amber-500">Awaiting your approval</p>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-300 mt-1">
+                      Target Start: {b.start ? new Date(b.start).toLocaleString() : 'N/A'}
+                    </div>
+                    <div className="mt-3 flex space-x-2">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm flex-1"
+                        onClick={() => navigate('/admin/room-approvals')}
+                      >
+                        Action Required
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {pendingApprovals.length > 5 && (
+                  <div className="text-center mt-2 text-xs text-gray-500">
+                    + {pendingApprovals.length - 5} more pending
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Quick Actions */}
       <div className="card mt-6">
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <a href="/events" className="btn btn-primary w-full">
+          <button type="button" onClick={() => navigate('/events')} className="btn btn-primary w-full">
             Browse Events
-          </a>
-          <a href="/book-room" className="btn btn-secondary w-full">
-            Book a Room
-          </a>
-          <a href="/bookings" className="btn btn-secondary w-full">
+          </button>
+          {isCreatorRole && (
+            <button type="button" onClick={() => navigate('/book-room')} className="btn btn-secondary w-full">
+              Book a Room
+            </button>
+          )}
+          <button type="button" onClick={() => navigate('/bookings')} className="btn btn-secondary w-full">
             View All Bookings
-          </a>
+          </button>
         </div>
       </div>
     </div>
