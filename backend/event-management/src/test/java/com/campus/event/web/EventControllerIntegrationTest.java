@@ -1,12 +1,8 @@
 package com.campus.event.web;
 
-import com.campus.event.domain.Building;
 import com.campus.event.domain.Role;
 import com.campus.event.domain.User;
-import com.campus.event.repository.BuildingRepository;
-import com.campus.event.repository.EventRegistrationRepository;
 import com.campus.event.repository.EventRepository;
-import com.campus.event.repository.RegistrationRepository;
 import com.campus.event.repository.UserRepository;
 import com.campus.event.security.JwtTokenService;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,15 +40,6 @@ class EventControllerIntegrationTest {
     private EventRepository eventRepository;
 
     @Autowired
-    private EventRegistrationRepository eventRegistrationRepository;
-
-    @Autowired
-    private RegistrationRepository registrationRepository;
-
-    @Autowired
-    private BuildingRepository buildingRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -60,23 +47,11 @@ class EventControllerIntegrationTest {
 
     private String adminToken;
     private String userToken;
-    private Long testBuildingId;
-    private String testBuildingName;
 
     @BeforeEach
     void setUp() {
-        eventRegistrationRepository.deleteAll();
-        registrationRepository.deleteAll();
         eventRepository.deleteAll();
         userRepository.deleteAll();
-
-        // Reuse seeded campus data: deleting buildings breaks FK chains (rooms → fixed_timetable).
-        Building building = buildingRepository.findByCode("AB1")
-                .or(() -> buildingRepository.findByIsActiveTrue().stream().findFirst())
-                .orElseThrow(() -> new IllegalStateException(
-                        "No building found; RoomManagementService seed data should create AB1"));
-        testBuildingId = building.getId();
-        testBuildingName = building.getName();
 
         // Create admin user
         User admin = new User();
@@ -111,47 +86,12 @@ class EventControllerIntegrationTest {
         return jwtTokenService.generateToken(claims, userDetails);
     }
 
-    /** Helper: build a valid event creation JSON body including the mandatory buildingId. */
-    private String eventJson(String title, String description, String location) {
-        return """
-                {
-                    "title": "%s",
-                    "description": "%s",
-                    "start": "%s",
-                    "end": "%s",
-                    "buildingId": %d,
-                    "location": "%s"
-                }
-                """.formatted(
-                title,
-                description,
-                java.time.LocalDateTime.now().plusDays(10).toString(),
-                java.time.LocalDateTime.now().plusDays(10).plusHours(2).toString(),
-                testBuildingId,
-                location
-        );
-    }
-
     @Test
     void createEvent_asAdmin_succeeds() throws Exception {
-        String body = eventJson("Integration Test Event", "Test description", "Room 101");
-
-        mockMvc.perform(post("/api/events")
-                        .header("Authorization", "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isOk());
-
-        assert eventRepository.count() == 1;
-    }
-
-    @Test
-    void createEvent_withoutBuilding_returnsBadRequest() throws Exception {
-        // Missing buildingId should trigger @NotNull validation and return 400
         String body = """
                 {
-                    "title": "No Building Event",
-                    "description": "Should fail validation",
+                    "title": "Integration Test Event",
+                    "description": "Test description",
                     "start": "%s",
                     "end": "%s",
                     "location": "Room 101"
@@ -165,12 +105,24 @@ class EventControllerIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
+
+        assert eventRepository.count() == 1;
     }
 
     @Test
     void createEvent_asGeneralUser_forbidden() throws Exception {
-        String body = eventJson("Unauthorized Event", "Should fail", "Room 101");
+        String body = """
+                {
+                    "title": "Unauthorized Event",
+                    "description": "Should fail",
+                    "start": "%s",
+                    "end": "%s"
+                }
+                """.formatted(
+                java.time.LocalDateTime.now().plusDays(10).toString(),
+                java.time.LocalDateTime.now().plusDays(10).plusHours(2).toString()
+        );
 
         mockMvc.perform(post("/api/events")
                         .header("Authorization", "Bearer " + userToken)
@@ -181,7 +133,12 @@ class EventControllerIntegrationTest {
 
     @Test
     void createEvent_noAuth_returnsUnauthorized() throws Exception {
-        String body = eventJson("No Auth", "Fail", "Room 101");
+        String body = """
+                {"title": "No Auth", "description": "Fail", "start": "%s", "end": "%s"}
+                """.formatted(
+                java.time.LocalDateTime.now().plusDays(10).toString(),
+                java.time.LocalDateTime.now().plusDays(10).plusHours(2).toString()
+        );
 
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -191,6 +148,8 @@ class EventControllerIntegrationTest {
 
     @Test
     void getPublicEvents_succeeds() throws Exception {
+        // Public events endpoint doesn't exist at /api/public/events,
+        // but /api/events/mine requires auth
         mockMvc.perform(get("/api/events/mine")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
@@ -200,7 +159,18 @@ class EventControllerIntegrationTest {
     @Test
     void myEvents_returnsOwnEvents() throws Exception {
         // First create an event
-        String body = eventJson("My Event", "Testing mine endpoint", "Lab");
+        String body = """
+                {
+                    "title": "My Event",
+                    "description": "Testing mine endpoint",
+                    "start": "%s",
+                    "end": "%s",
+                    "location": "Lab"
+                }
+                """.formatted(
+                java.time.LocalDateTime.now().plusDays(10).toString(),
+                java.time.LocalDateTime.now().plusDays(10).plusHours(2).toString()
+        );
 
         mockMvc.perform(post("/api/events")
                         .header("Authorization", "Bearer " + adminToken)
@@ -208,13 +178,11 @@ class EventControllerIntegrationTest {
                         .content(body))
                 .andExpect(status().isOk());
 
-        // Now fetch them — verify building info is included in response
+        // Now fetch them
         mockMvc.perform(get("/api/events/mine")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].title").value("My Event"))
-                .andExpect(jsonPath("$[0].buildingId").value(testBuildingId.intValue()))
-                .andExpect(jsonPath("$[0].buildingName").value(testBuildingName));
+                .andExpect(jsonPath("$[0].title").value("My Event"));
     }
 }

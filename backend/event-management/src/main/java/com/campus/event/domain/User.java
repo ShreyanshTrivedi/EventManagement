@@ -11,7 +11,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
-import jakarta.persistence.Column;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -45,14 +44,6 @@ public class User {
 
     private String clubId;
 
-    private String fullName;
-
-    private Long managedBuildingId;
-
-    /** Required for {@link Role#BUILDING_ADMIN}: which room category this admin approves. */
-    @Enumerated(EnumType.STRING)
-    private AdminScope adminScope;
-
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
@@ -60,9 +51,6 @@ public class User {
     
     @Enumerated(EnumType.STRING)
     private Role requestedRole;
-
-    @Column(name = "active_session_token", length = 512)
-    private String activeSessionToken;
         // Explicit getters and setters
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
@@ -78,16 +66,8 @@ public class User {
         public void setRoles(Set<Role> roles) { this.roles = roles; }
         public Role getRequestedRole() { return requestedRole; }
         public void setRequestedRole(Role requestedRole) { this.requestedRole = requestedRole; }
-        public String getActiveSessionToken() { return activeSessionToken; }
-        public void setActiveSessionToken(String activeSessionToken) { this.activeSessionToken = activeSessionToken; }
         public String getClubId() { return clubId; }
         public void setClubId(String clubId) { this.clubId = clubId; }
-        public String getFullName() { return fullName; }
-        public void setFullName(String fullName) { this.fullName = fullName; }
-        public Long getManagedBuildingId() { return managedBuildingId; }
-        public void setManagedBuildingId(Long managedBuildingId) { this.managedBuildingId = managedBuildingId; }
-        public AdminScope getAdminScope() { return adminScope; }
-        public void setAdminScope(AdminScope adminScope) { this.adminScope = adminScope; }
 }
 
 

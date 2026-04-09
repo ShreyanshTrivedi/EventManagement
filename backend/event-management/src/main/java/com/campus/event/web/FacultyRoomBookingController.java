@@ -13,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -42,35 +41,19 @@ public class FacultyRoomBookingController {
     public static class DirectBookBody {
         public Long eventId; // optional
         public Long roomId; // required
-        /** Required: must match the building that contains {@code roomId}. */
-        public Long buildingId;
         public LocalDateTime start; // required if eventId is null
         public LocalDateTime end;   // required if eventId is null
         public String purpose; // optional, used if eventId is null
     }
 
-    private static boolean roomBelongsToBuilding(Room room, Long buildingId) {
-        if (room == null || buildingId == null) return false;
-        return room.getFloor() != null
-                && room.getFloor().getBuilding() != null
-                && buildingId.equals(room.getFloor().getBuilding().getId());
-    }
-
     @PostMapping
-    @Transactional
     public ResponseEntity<?> directBook(@Valid @RequestBody DirectBookBody body,
                                         @AuthenticationPrincipal UserDetails principal) {
         if (body == null || body.roomId == null) {
             return ResponseEntity.badRequest().body("roomId is required");
         }
-        if (body.buildingId == null) {
-            return ResponseEntity.badRequest().body("buildingId is required");
-        }
         Room room = roomRepo.findById(body.roomId).orElse(null);
         if (room == null) return ResponseEntity.badRequest().body("Room not found");
-        if (!roomBelongsToBuilding(room, body.buildingId)) {
-            return ResponseEntity.badRequest().body("Room does not belong to the selected building");
-        }
 
         LocalDateTime start;
         LocalDateTime end;

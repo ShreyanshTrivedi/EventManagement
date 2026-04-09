@@ -2,7 +2,6 @@ package com.campus.event.service;
 
 import com.campus.event.domain.Event;
 import com.campus.event.domain.Registration;
-import com.campus.event.testsupport.TestBuildings;
 import com.campus.event.domain.Role;
 import com.campus.event.domain.User;
 import com.campus.event.repository.EventRepository;
@@ -46,7 +45,6 @@ class RegistrationServiceTest {
         event.setTitle("Tech Talk");
         event.setStartTime(LocalDateTime.now().plusDays(10));
         event.setEndTime(LocalDateTime.now().plusDays(10).plusHours(2));
-        event.setBuilding(TestBuildings.defaultBuilding());
     }
 
     @Test

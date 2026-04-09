@@ -126,4 +126,3 @@ backend/event-management/target/
 node_modules/
 dist/
 .env
-"target/" 

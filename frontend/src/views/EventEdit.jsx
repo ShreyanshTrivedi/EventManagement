@@ -31,8 +31,6 @@ export default function EventEdit() {
   const [club, setClub] = useState('')
   const [selected, setSelected] = useState(['full_name', 'email'])
   const [maxAttendees, setMaxAttendees] = useState('')
-  const [buildingId, setBuildingId] = useState('')
-  const [buildings, setBuildings] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -45,42 +43,37 @@ export default function EventEdit() {
   }, [])
 
   useEffect(() => {
-    // Load buildings and event data in parallel
-    Promise.all([
-      api.get('/api/public/buildings'),
-      api.get(`/api/public/events/${id}`)
-    ]).then(([buildingsRes, eventRes]) => {
-      setBuildings(buildingsRes.data || [])
-      const ev = eventRes.data
-      setTitle(ev.title || '')
-      setDescription(ev.description || '')
-      setLoc(ev.location || '')
-      setClub(ev.clubId || '')
-      setMaxAttendees(ev.maxAttendees != null ? String(ev.maxAttendees) : '')
-      setBuildingId(ev.buildingId != null ? String(ev.buildingId) : '')
-      if (ev.startTime) {
-        const s = String(ev.startTime).slice(0, 16) // YYYY-MM-DDTHH:MM
-        const [d, t] = s.split('T')
-        setStartDate(d || '')
-        setStartTime(t || '')
-      }
-      if (ev.endTime) {
-        const s = String(ev.endTime).slice(0, 16)
-        const [d, t] = s.split('T')
-        setEndDate(d || '')
-        setEndTime(t || '')
-      }
-      try {
-        const schema = ev.registrationSchema ? JSON.parse(ev.registrationSchema) : []
-        if (Array.isArray(schema) && schema.length > 0) {
-          setSelected(schema)
+    api.get(`/api/public/events/${id}`)
+      .then(res => {
+        const ev = res.data
+        setTitle(ev.title || '')
+        setDescription(ev.description || '')
+        setLoc(ev.location || '')
+        setClub(ev.clubId || '')
+        setMaxAttendees(ev.maxAttendees != null ? String(ev.maxAttendees) : '')
+        if (ev.startTime) {
+          const s = String(ev.startTime).slice(0, 16) // YYYY-MM-DDTHH:MM
+          const [d, t] = s.split('T')
+          setStartDate(d || '')
+          setStartTime(t || '')
         }
-      } catch {
-        // ignore parse errors
-      }
-    })
-    .catch(() => setError('Failed to load event'))
-    .finally(() => setLoading(false))
+        if (ev.endTime) {
+          const s = String(ev.endTime).slice(0, 16)
+          const [d, t] = s.split('T')
+          setEndDate(d || '')
+          setEndTime(t || '')
+        }
+        try {
+          const schema = ev.registrationSchema ? JSON.parse(ev.registrationSchema) : []
+          if (Array.isArray(schema) && schema.length > 0) {
+            setSelected(schema)
+          }
+        } catch {
+          // ignore parse errors
+        }
+      })
+      .catch(() => setError('Failed to load event'))
+      .finally(() => setLoading(false))
   }, [id])
 
   const toggleField = (key) => {
@@ -91,7 +84,6 @@ export default function EventEdit() {
     e.preventDefault()
     setError('')
     setMessage('')
-    if (!buildingId) { setError('Please select a building'); return }
     setSaving(true)
     try {
       if (!startDate || !startTime || !endDate || !endTime) {
@@ -116,7 +108,6 @@ export default function EventEdit() {
         description: description.trim(),
         start: startValue,
         end: endValue,
-        buildingId: Number(buildingId),
         location: loc.trim() || undefined,
         clubId: club || undefined,
         maxAttendees: maxAttendees ? Number(maxAttendees) : undefined,
@@ -131,9 +122,7 @@ export default function EventEdit() {
         showToast({ message: 'Failed to update event', type: 'error' })
       }
     } catch (err) {
-      const errData = err.response?.data
-      const errMsg = typeof errData === 'object' ? (errData.details || errData.error || 'Failed to update event') : (errData || 'Failed to update event')
-      setError(errMsg)
+      setError(err.response?.data || 'Failed to update event')
     } finally {
       setSaving(false)
     }
@@ -162,7 +151,7 @@ export default function EventEdit() {
         <form onSubmit={onSubmit} className="space-y-8">
           <Card className="p-6">
             <div className="text-sm font-semibold text-[#E5E7EB]">Event Details</div>
-            <div className="mt-1 text-sm text-[#9CA3AF]">Update title, building, location and schedule.</div>
+            <div className="mt-1 text-sm text-[#9CA3AF]">Update title, location and schedule.</div>
             <div className="mt-6 border-t border-[#1F2937]" />
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -171,31 +160,8 @@ export default function EventEdit() {
                 <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} required />
               </div>
               <div className="form-group">
-                <label className="form-label">
-                  Building <span className="text-red-400">*</span>
-                </label>
-                <select
-                  className="form-input"
-                  value={buildingId}
-                  onChange={(e) => setBuildingId(e.target.value)}
-                  required
-                >
-                  <option value="">Select a building...</option>
-                  {buildings.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="form-group">
                 <label className="form-label">Location (optional)</label>
                 <input className="form-input" value={loc} onChange={e => setLoc(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Club ID (optional)</label>
-                <input className="form-input" value={club} onChange={e => setClub(e.target.value)} />
               </div>
             </div>
 
@@ -235,6 +201,11 @@ export default function EventEdit() {
                   <TimeSelect value={endTime} onChange={setEndTime} required />
                 </div>
               </div>
+            </div>
+
+            <div className="mt-5 form-group">
+              <label className="form-label">Club ID (optional)</label>
+              <input className="form-input" value={club} onChange={e => setClub(e.target.value)} />
             </div>
 
             <div className="mt-5 form-group">
@@ -308,7 +279,7 @@ export default function EventEdit() {
 
           <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-2">
             <Button type="button" variant="secondary" onClick={() => navigate('/dashboard')} disabled={saving}>Cancel</Button>
-            <Button type="submit" disabled={saving || !buildingId}>
+            <Button type="submit" disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>

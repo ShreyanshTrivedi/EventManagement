@@ -5,7 +5,6 @@ import com.campus.event.repository.RoomRepository;
 import com.campus.event.service.RoomAvailabilityService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -27,12 +26,9 @@ public class RoomController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('GENERAL_USER','CLUB_ASSOCIATE','FACULTY','ADMIN','CENTRAL_ADMIN','BUILDING_ADMIN')")
-    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('GENERAL_USER','CLUB_ASSOCIATE','FACULTY','ADMIN')")
     public List<Map<String, Object>> listRooms() {
-        return roomRepository.findAll().stream()
-            .filter(r -> r.getFloor() != null && r.getFloor().getBuilding() != null)
-            .map(r -> {
+        return roomRepository.findAll().stream().map(r -> {
             Map<String, Object> m = new HashMap<>();
             m.put("id", r.getId());
             m.put("name", r.getName());
@@ -40,15 +36,12 @@ public class RoomController {
             m.put("type", r.getType());
             m.put("capacity", r.getCapacity());
             m.put("amenities", r.getAmenities());
-            m.put("buildingId", r.getFloor().getBuilding().getId());
-            m.put("buildingName", r.getFloor().getBuilding().getName());
             return m;
         }).collect(Collectors.toList());
     }
 
     @GetMapping("/availability")
-    @PreAuthorize("hasAnyRole('CLUB_ASSOCIATE','FACULTY','ADMIN','CENTRAL_ADMIN','BUILDING_ADMIN')")
-    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('CLUB_ASSOCIATE','FACULTY','ADMIN')")
     public ResponseEntity<List<Map<String, Object>>> availability(@RequestParam LocalDateTime start,
                                                                   @RequestParam LocalDateTime end) {
         List<Room> rooms = roomRepository.findAll();
@@ -64,7 +57,7 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}/availability")
-    @PreAuthorize("hasAnyRole('CLUB_ASSOCIATE','FACULTY','ADMIN','CENTRAL_ADMIN','BUILDING_ADMIN')")
+    @PreAuthorize("hasAnyRole('CLUB_ASSOCIATE','FACULTY','ADMIN')")
     public ResponseEntity<Map<String, Object>> roomAvailability(@PathVariable Long roomId,
                                                                 @RequestParam LocalDateTime start,
                                                                 @RequestParam LocalDateTime end) {
@@ -73,8 +66,7 @@ public class RoomController {
     }
 
     @GetMapping("/status-now")
-    @PreAuthorize("hasAnyRole('CLUB_ASSOCIATE','FACULTY','ADMIN','CENTRAL_ADMIN','BUILDING_ADMIN')")
-    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('CLUB_ASSOCIATE','FACULTY','ADMIN')")
     public ResponseEntity<List<Map<String, Object>>> statusNow() {
         LocalDateTime now = LocalDateTime.now();
         List<Room> rooms = roomRepository.findAll();
