@@ -310,10 +310,6 @@ export default function RoomBooking() {
           setMessage('Please select three room preferences')
           return
         }
-        if (new Set([pref1, pref2, pref3]).size < 3) {
-          setMessage('Please select three different rooms')
-          return
-        }
         if (!eventId) { setMessage('Please select an event'); return }
 
         const payload = {
