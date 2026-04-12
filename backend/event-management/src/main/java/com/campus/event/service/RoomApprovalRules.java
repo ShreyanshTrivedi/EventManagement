@@ -1,8 +1,8 @@
 package com.campus.event.service;
 
 import com.campus.event.domain.AdminScope;
-import com.campus.event.domain.Room;
-import com.campus.event.domain.RoomType;
+import com.campus.event.domain.Resource;
+import com.campus.event.domain.ResourceType;
 
 /**
  * Maps physical {@link RoomType} values to approval lanes ({@link AdminScope}).
@@ -19,21 +19,21 @@ public final class RoomApprovalRules {
     private RoomApprovalRules() {
     }
 
-    public static AdminScope scopeForRoomType(RoomType type) {
+    public static AdminScope scopeForResourceType(ResourceType type) {
         if (type == null) {
             return AdminScope.NORMAL_ROOM;
         }
         return switch (type) {
-            case AUDITORIUM, SEMINAR_HALL, LECTURE_HALL -> AdminScope.LARGE_HALL;
-            case LAB, MEETING_ROOM, CLASSROOM -> AdminScope.NORMAL_ROOM;
+            case AUDITORIUM, OPEN_SPACE, SPORTS_GROUND, CAFETERIA -> AdminScope.LARGE_HALL;
+            case LAB, ROOM -> AdminScope.NORMAL_ROOM;
         };
     }
 
-    public static AdminScope scopeForRoom(Room room) {
-        return room == null ? AdminScope.NORMAL_ROOM : scopeForRoomType(room.getType());
+    public static AdminScope scopeForResource(Resource resource) {
+        return resource == null ? AdminScope.NORMAL_ROOM : scopeForResourceType(resource.getResourceType());
     }
 
-    public static boolean matchesScope(Room room, AdminScope scope) {
-        return scopeForRoom(room) == scope;
+    public static boolean matchesScope(Resource resource, AdminScope scope) {
+        return scopeForResource(resource) == scope;
     }
 }

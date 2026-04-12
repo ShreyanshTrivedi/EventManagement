@@ -1,10 +1,10 @@
 package com.campus.event.service;
 
 import com.campus.event.domain.Event;
-import com.campus.event.domain.RoomBookingRequest;
+import com.campus.event.domain.ResourceBookingRequest;
 import com.campus.event.domain.RoomBookingStatus;
 import com.campus.event.repository.EventRepository;
-import com.campus.event.repository.RoomBookingRequestRepository;
+import com.campus.event.repository.ResourceBookingRequestRepository;
 import com.campus.event.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,12 +18,12 @@ import java.util.List;
 public class ConfirmBookingScheduler {
     private static final Logger log = LoggerFactory.getLogger(ConfirmBookingScheduler.class);
 
-    private final RoomBookingRequestRepository requestRepo;
+    private final ResourceBookingRequestRepository requestRepo;
     private final EventRepository eventRepo;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
-    public ConfirmBookingScheduler(RoomBookingRequestRepository requestRepo, EventRepository eventRepo,
+    public ConfirmBookingScheduler(ResourceBookingRequestRepository requestRepo, EventRepository eventRepo,
                                    UserRepository userRepository, NotificationService notificationService) {
         this.requestRepo = requestRepo;
         this.eventRepo = eventRepo;
@@ -35,15 +35,15 @@ public class ConfirmBookingScheduler {
     @Scheduled(cron = "0 0 * * * *")
     public void confirmApprovedBookings() {
         LocalDateTime cutoff = LocalDateTime.now().plusDays(2);
-        List<RoomBookingRequest> toConfirm = requestRepo.findApprovedToConfirm(cutoff);
-        for (RoomBookingRequest r : toConfirm) {
+        List<ResourceBookingRequest> toConfirm = requestRepo.findApprovedToConfirm(cutoff);
+        for (ResourceBookingRequest r : toConfirm) {
             try {
-                if (r.getAllocatedRoom() == null) continue;
+                if (r.getAllocatedResource() == null) continue;
                 Event evt = r.getEvent();
                 if (evt == null) continue;
                 // Update event location from allocated room
                 if (evt.getLocation() == null || "TBD".equalsIgnoreCase(evt.getLocation())) {
-                    evt.setLocation(r.getAllocatedRoom().getName());
+                    evt.setLocation(r.getAllocatedResource().getName());
                     eventRepo.save(evt);
                 }
                 r.setStatus(RoomBookingStatus.CONFIRMED);
@@ -53,7 +53,7 @@ public class ConfirmBookingScheduler {
                 if (r.getRequestedByUsername() != null) {
                     userRepository.findByUsername(r.getRequestedByUsername()).ifPresent(u -> {
                         String subj = "Room booking confirmed";
-                        String msg = "Your room booking request (ID " + r.getId() + ") is now CONFIRMED for room '" + r.getAllocatedRoom().getName() + "'.";
+                        String msg = "Your room booking request (ID " + r.getId() + ") is now CONFIRMED for room '" + r.getAllocatedResource().getName() + "'.";
                         notificationService.notifyAllChannels(u, subj, msg);
                     });
                 }

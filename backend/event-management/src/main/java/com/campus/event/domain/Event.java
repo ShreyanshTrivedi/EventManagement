@@ -59,6 +59,11 @@ public class Event {
     @Column(name = "timing_model", nullable = false)
     private EventTimingModel timingModel = EventTimingModel.SINGLE_DAY;
 
+    /** Lifecycle state. Defaults to PENDING (awaiting room allocation). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private EventStatus status = EventStatus.PENDING;
+
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("slotStart ASC")
     private java.util.List<EventTimeSlot> timeSlots = new java.util.ArrayList<>();
@@ -89,6 +94,8 @@ public class Event {
     public void setRegistrationSchema(String registrationSchema) { this.registrationSchema = registrationSchema; }
     public EventTimingModel getTimingModel() { return timingModel; }
     public void setTimingModel(EventTimingModel timingModel) { this.timingModel = timingModel; }
+    public EventStatus getStatus() { return status; }
+    public void setStatus(EventStatus status) { this.status = status; }
     public java.util.List<EventTimeSlot> getTimeSlots() { return timeSlots; }
     public void setTimeSlots(java.util.List<EventTimeSlot> timeSlots) { this.timeSlots = timeSlots; }
 }

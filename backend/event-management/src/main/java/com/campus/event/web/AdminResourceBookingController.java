@@ -2,20 +2,24 @@ package com.campus.event.web;
 
 import com.campus.event.domain.AdminScope;
 import com.campus.event.domain.Event;
+import com.campus.event.domain.EventStatus;
 import com.campus.event.domain.EventTimeSlot;
 import com.campus.event.domain.Role;
-import com.campus.event.domain.Room;
-import com.campus.event.domain.RoomBookingRequest;
+import com.campus.event.domain.Resource;
+import com.campus.event.domain.ResourceBookingRequest;
+import com.campus.event.domain.ResourceType;
 import com.campus.event.domain.RoomBookingStatus;
 import com.campus.event.domain.User;
 import com.campus.event.repository.EventRegistrationRepository;
+import com.campus.event.repository.EventRepository;
 import com.campus.event.repository.EventTimeSlotRepository;
-import com.campus.event.repository.RoomBookingRequestRepository;
-import com.campus.event.repository.RoomRepository;
+import com.campus.event.repository.ResourceBookingRequestRepository;
+import com.campus.event.repository.ResourceRepository;
 import com.campus.event.repository.UserRepository;
 import com.campus.event.service.NotificationService;
 import com.campus.event.service.RoomApprovalRules;
 import com.campus.event.service.ScheduleService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -39,35 +43,41 @@ import java.util.stream.Stream;
 @RestController
 @RequestMapping("/api/admin/room-requests")
 @PreAuthorize("hasAnyRole('ADMIN', 'BUILDING_ADMIN')")
-public class AdminRoomBookingController {
+public class AdminResourceBookingController {
 
-    private final RoomBookingRequestRepository requestRepo;
-    private final RoomRepository roomRepo;
+    /** Minutes before an admin claim expires and another admin may claim the request. */
+    private static final int CLAIM_EXPIRY_MINUTES = 15;
+
+    private final ResourceBookingRequestRepository requestRepo;
+    private final ResourceRepository resourceRepo;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final EventRegistrationRepository registrationRepo;
     private final ScheduleService scheduleService;
     private final EventTimeSlotRepository eventTimeSlotRepository;
+    private final EventRepository eventRepository;
 
-    public AdminRoomBookingController(RoomBookingRequestRepository requestRepo, RoomRepository roomRepo,
+    public AdminResourceBookingController(ResourceBookingRequestRepository requestRepo, ResourceRepository resourceRepo,
                                       UserRepository userRepository, NotificationService notificationService,
                                       ScheduleService scheduleService,
                                       EventRegistrationRepository registrationRepo,
-                                      EventTimeSlotRepository eventTimeSlotRepository) {
+                                      EventTimeSlotRepository eventTimeSlotRepository,
+                                      EventRepository eventRepository) {
         this.requestRepo = requestRepo;
-        this.roomRepo = roomRepo;
+        this.resourceRepo = resourceRepo;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.scheduleService = scheduleService;
         this.registrationRepo = registrationRepo;
         this.eventTimeSlotRepository = eventTimeSlotRepository;
+        this.eventRepository = eventRepository;
     }
 
     @GetMapping
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list(@RequestParam(value = "status", required = false) String status,
                                           @AuthenticationPrincipal UserDetails principal) {
-        List<RoomBookingRequest> list = status == null
+        List<ResourceBookingRequest> list = status == null
                 ? requestRepo.findRecentBookings(org.springframework.data.domain.PageRequest.of(0, 200)).getContent()
                 : requestRepo.findByStatusOrderByRequestedAtDesc(RoomBookingStatus.valueOf(status));
 
@@ -99,7 +109,7 @@ public class AdminRoomBookingController {
                 .collect(Collectors.toList());
     }
 
-    private static boolean visibleToBuildingAdmin(RoomBookingRequest r, User admin) {
+    private static boolean visibleToBuildingAdmin(ResourceBookingRequest r, User admin) {
         Long bid = admin.getManagedBuildingId();
         AdminScope scope = admin.getAdminScope();
         if (bid == null || scope == null) {
@@ -112,7 +122,7 @@ public class AdminRoomBookingController {
             }
         }
         boolean any = false;
-        for (Room p : Arrays.asList(r.getPref1(), r.getPref2(), r.getPref3())) {
+        for (Resource p : Arrays.asList(r.getPref1(), r.getPref2(), r.getPref3())) {
             if (p == null) {
                 continue;
             }
@@ -121,7 +131,7 @@ public class AdminRoomBookingController {
                     || !bid.equals(p.getFloor().getBuilding().getId())) {
                 return false;
             }
-            if (RoomApprovalRules.scopeForRoom(p) != scope) {
+            if (RoomApprovalRules.scopeForResource(p) != scope) {
                 return false;
             }
         }
@@ -129,7 +139,7 @@ public class AdminRoomBookingController {
             return false;
         }
         if (r.getEvent() == null) {
-            Room ref = Stream.of(r.getPref1(), r.getPref2(), r.getPref3()).filter(x -> x != null).findFirst().orElse(null);
+            Resource ref = Stream.of(r.getPref1(), r.getPref2(), r.getPref3()).filter(x -> x != null).findFirst().orElse(null);
             if (ref == null) {
                 return false;
             }
@@ -137,12 +147,12 @@ public class AdminRoomBookingController {
                     || !bid.equals(ref.getFloor().getBuilding().getId())) {
                 return false;
             }
-            return RoomApprovalRules.scopeForRoom(ref) == scope;
+            return RoomApprovalRules.scopeForResource(ref) == scope;
         }
         return true;
     }
 
-    private Map<String, Object> toDto(RoomBookingRequest r) {
+    private Map<String, Object> toDto(ResourceBookingRequest r) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", r.getId());
         if (r.getEvent() != null) {
@@ -178,7 +188,7 @@ public class AdminRoomBookingController {
             m.put("end", r.getMeetingEnd());
             m.put("timingModel", "SINGLE_DAY");
             m.put("slotCount", 1);
-            Room ref = r.getPref1();
+            Resource ref = r.getPref1();
             if (ref != null && ref.getFloor() != null && ref.getFloor().getBuilding() != null) {
                 m.put("buildingId", ref.getFloor().getBuilding().getId());
                 m.put("buildingName", ref.getFloor().getBuilding().getName());
@@ -191,10 +201,30 @@ public class AdminRoomBookingController {
         m.put("pref1Id", r.getPref1() != null ? r.getPref1().getId() : null);
         m.put("pref2Id", r.getPref2() != null ? r.getPref2().getId() : null);
         m.put("pref3Id", r.getPref3() != null ? r.getPref3().getId() : null);
-        m.put("pref1RoomType", r.getPref1() != null && r.getPref1().getType() != null ? r.getPref1().getType().name() : null);
-        m.put("approvalScope", r.getPref1() != null ? RoomApprovalRules.scopeForRoom(r.getPref1()).name() : null);
-        m.put("allocatedRoom", r.getAllocatedRoom() != null ? r.getAllocatedRoom().getName() : null);
+        m.put("pref1RoomType", r.getPref1() != null && r.getPref1().getResourceType() != null ? r.getPref1().getResourceType().name() : null);
+        m.put("approvalScope", r.getPref1() != null ? RoomApprovalRules.scopeForResource(r.getPref1()).name() : null);
+        if (r.getAllocatedResource() != null) {
+            Resource ar = r.getAllocatedResource();
+            m.put("allocatedResourceId", ar.getId());
+            m.put("allocatedRoomId", ar.getRoomRefId() != null ? ar.getRoomRefId() : ar.getId());
+            m.put("allocatedRoom", ar.getName());
+        } else {
+            m.put("allocatedResourceId", null);
+            m.put("allocatedRoomId", null);
+            m.put("allocatedRoom", null);
+        }
         m.put("requestedBy", r.getRequestedByUsername());
+        if (r.getClaimedBy() != null) {
+            m.put("claimedBy", r.getClaimedBy().getUsername());
+        } else {
+            m.put("claimedBy", null);
+        }
+        m.put("claimedAt", r.getClaimedAt());
+        if (r.getClaimedAt() != null) {
+            m.put("claimExpiresAt", r.getClaimedAt().plusMinutes(CLAIM_EXPIRY_MINUTES));
+        } else {
+            m.put("claimExpiresAt", null);
+        }
         if (r.getSplitGroupId() != null) {
             m.put("splitGroupId", r.getSplitGroupId().toString());
             m.put("splitPart", Boolean.TRUE);
@@ -205,24 +235,90 @@ public class AdminRoomBookingController {
     }
 
     public static class ApproveBody {
+        public Long allocatedResourceId;
         public Long allocatedRoomId;
+    }
+
+    private boolean claimIsActive(ResourceBookingRequest r) {
+        if (r.getClaimedAt() == null || r.getClaimedBy() == null) {
+            return false;
+        }
+        return !r.getClaimedAt().plusMinutes(CLAIM_EXPIRY_MINUTES).isBefore(LocalDateTime.now());
+    }
+
+    private boolean callerOwnsActiveClaim(ResourceBookingRequest r, String username) {
+        return claimIsActive(r) && r.getClaimedBy() != null
+                && username.equals(r.getClaimedBy().getUsername());
+    }
+
+    @PostMapping("/{id}/claim")
+    @Transactional
+    public ResponseEntity<?> claim(@PathVariable Long id, @AuthenticationPrincipal UserDetails principal) {
+        ResourceBookingRequest req = requestRepo.findByIdForUpdate(id).orElse(null);
+        if (req == null) {
+            return ResponseEntity.notFound().build();
+        }
+        User currentUser = userRepository.findByUsername(principal.getUsername()).orElse(null);
+        if (currentUser == null) {
+            return ResponseEntity.status(403).body("Not allowed to claim this request");
+        }
+        boolean isSuperAdmin = currentUser.getRoles().contains(Role.ADMIN);
+        boolean isBuildingAdmin = currentUser.getRoles().contains(Role.BUILDING_ADMIN);
+        boolean adminIsBounded = currentUser.getManagedBuildingId() != null && currentUser.getAdminScope() != null;
+        boolean bypassChecks = isSuperAdmin && !adminIsBounded;
+        if (!bypassChecks) {
+            if (!(isBuildingAdmin || isSuperAdmin) || !visibleToBuildingAdmin(req, currentUser)) {
+                return ResponseEntity.status(403).body("Not allowed to claim this request");
+            }
+        }
+        if (req.getStatus() != RoomBookingStatus.PENDING) {
+            return ResponseEntity.badRequest().body("Only pending requests can be claimed");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (claimIsActive(req)) {
+            if (!principal.getUsername().equals(req.getClaimedBy().getUsername())) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body("This request is already claimed by another administrator");
+            }
+            return ResponseEntity.ok(Map.of(
+                    "message", "Already claimed by you",
+                    "claimedAt", req.getClaimedAt(),
+                    "claimExpiresAt", req.getClaimedAt().plusMinutes(CLAIM_EXPIRY_MINUTES)));
+        }
+        req.setClaimedBy(currentUser);
+        req.setClaimedAt(now);
+        requestRepo.save(req);
+        return ResponseEntity.ok(Map.of(
+                "claimedAt", now,
+                "claimExpiresAt", now.plusMinutes(CLAIM_EXPIRY_MINUTES),
+                "claimedBy", principal.getUsername()));
     }
 
     @PostMapping("/{id}/approve")
     @Transactional
     public ResponseEntity<?> approve(@PathVariable Long id, @RequestBody ApproveBody body,
                                      @AuthenticationPrincipal UserDetails principal) {
-        RoomBookingRequest req = requestRepo.findById(id).orElse(null);
+        ResourceBookingRequest req = requestRepo.findByIdForUpdate(id).orElse(null);
         if (req == null) {
             return ResponseEntity.notFound().build();
         }
-        if (body == null || body.allocatedRoomId == null) {
-            return ResponseEntity.badRequest().body("allocatedRoomId required");
+        Long allocId = body != null && body.allocatedResourceId != null
+                ? body.allocatedResourceId
+                : (body != null ? body.allocatedRoomId : null);
+        if (body == null || allocId == null) {
+            return ResponseEntity.badRequest().body("allocatedResourceId or allocatedRoomId required");
+        }
+        if (!callerOwnsActiveClaim(req, principal.getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("You must hold an active claim on this request to approve it");
         }
         // Force database-level pessimistic lock to serialize approvals for this room
-        Room alloc = roomRepo.findByIdWithPessimisticLock(body.allocatedRoomId).orElse(null);
+        Resource alloc = resourceRepo.findByIdWithLock(allocId).orElse(null);
         if (alloc == null) {
             return ResponseEntity.badRequest().body("Room not found");
+        }
+        if (req.getEvent() == null && alloc.getResourceType() == ResourceType.OPEN_SPACE) {
+            return ResponseEntity.badRequest().body("Meetings can only be allocated to ROOM-type resources, not OPEN_SPACE");
         }
 
         User currentUser = userRepository.findByUsername(principal.getUsername()).orElse(null);
@@ -246,7 +342,7 @@ public class AdminRoomBookingController {
                     || !currentUser.getManagedBuildingId().equals(alloc.getFloor().getBuilding().getId())) {
                 return ResponseEntity.status(403).body("Allocated room must be in your building");
             }
-            if (currentUser.getAdminScope() != RoomApprovalRules.scopeForRoom(alloc)) {
+            if (currentUser.getAdminScope() != RoomApprovalRules.scopeForResource(alloc)) {
                 return ResponseEntity.status(403).body("Allocated room type does not match your admin scope");
             }
         }
@@ -281,17 +377,40 @@ public class AdminRoomBookingController {
             }
             List<String> allocConflicts = slotConflicts.getOrDefault(alloc.getId().toString(), java.util.Collections.emptyList());
             if (!allocConflicts.isEmpty()) {
-                return ResponseEntity.badRequest().body("Allocated room has schedule conflicts: " + allocConflicts);
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body("Allocated room has schedule conflicts: " + allocConflicts);
             }
         }
 
-        req.setAllocatedRoom(alloc);
+        req.setAllocatedResource(alloc);
         req.setStatus(RoomBookingStatus.APPROVED);
         req.setApprovedAt(LocalDateTime.now());
         req.setApprovedByUsername(principal.getUsername());
         requestRepo.save(req);
         rejectSplitSiblings(req);
 
+        // ── State machine: PENDING → APPROVED ──────────────────────────────
+        if (req.getEvent() != null) {
+            Event ev = eventRepository.findById(req.getEvent().getId()).orElse(null);
+            if (ev != null && ev.getStatus() == EventStatus.PENDING) {
+                ev.setStatus(EventStatus.APPROVED);
+                eventRepository.save(ev);
+
+                // ── Notify all registered students that the event is live ──
+                String liveSubj = "Event confirmed: " + ev.getTitle();
+                String liveMsg  = "Great news! '" + ev.getTitle() + "' on "
+                        + ev.getStartTime().toLocalDate()
+                        + " has been confirmed and a room has been allocated: "
+                        + alloc.getName() + ". See you there!";
+                registrationRepo.findByEvent_Id(ev.getId()).forEach(reg -> {
+                    if (reg.getUser() != null) {
+                        notificationService.notifyAllChannels(reg.getUser(), liveSubj, liveMsg);
+                    }
+                });
+            }
+        }
+
+        // ── Notify requester ────────────────────────────────────────────────
         if (req.getRequestedByUsername() != null) {
             userRepository.findByUsername(req.getRequestedByUsername()).ifPresent(u -> {
                 String subj = "Room request approved";
@@ -302,7 +421,7 @@ public class AdminRoomBookingController {
         return ResponseEntity.ok("Approved");
     }
 
-    private void rejectSplitSiblings(RoomBookingRequest approved) {
+    private void rejectSplitSiblings(ResourceBookingRequest approved) {
         if (approved.getSplitGroupId() != null) {
             requestRepo.rejectSplitSiblingsBulk(approved.getSplitGroupId(), approved.getId());
         }
@@ -311,7 +430,7 @@ public class AdminRoomBookingController {
     @PostMapping("/{id}/reject")
     @Transactional
     public ResponseEntity<?> reject(@PathVariable Long id, @AuthenticationPrincipal UserDetails principal) {
-        RoomBookingRequest req = requestRepo.findById(id).orElse(null);
+        ResourceBookingRequest req = requestRepo.findByIdForUpdate(id).orElse(null);
         if (req == null) {
             return ResponseEntity.notFound().build();
         }
@@ -328,6 +447,10 @@ public class AdminRoomBookingController {
             if (!(isBuildingAdmin || isSuperAdmin) || !visibleToBuildingAdmin(req, currentUser)) {
                 return ResponseEntity.status(403).body("Not allowed to reject this request");
             }
+        }
+        if (!callerOwnsActiveClaim(req, principal.getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("You must hold an active claim on this request to reject it");
         }
 
         req.setStatus(RoomBookingStatus.REJECTED);
@@ -346,7 +469,7 @@ public class AdminRoomBookingController {
     @GetMapping("/{id}/conflicts")
     @Transactional(readOnly = true)
     public ResponseEntity<?> getConflicts(@PathVariable Long id, @AuthenticationPrincipal UserDetails principal) {
-        RoomBookingRequest req = requestRepo.findById(id).orElse(null);
+        ResourceBookingRequest req = requestRepo.findById(id).orElse(null);
         if (req == null) {
             return ResponseEntity.notFound().build();
         }

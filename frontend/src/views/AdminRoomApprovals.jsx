@@ -38,12 +38,14 @@ function formatDateTime(value) {
 }
 
 export default function AdminRoomApprovals() {
-  const { hasRole } = useAuth()
+  const { hasRole, user } = useAuth()
   const [requests, setRequests] = useState([])
-  const [rooms, setRooms] = useState([])
+  const [resources, setResources] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+
+  const currentUsername = user?.sub || user?.username || ''
 
   const load = async ({ silent } = {}) => {
     if (silent) {
@@ -53,12 +55,12 @@ export default function AdminRoomApprovals() {
     }
     setError('')
     try {
-      const [reqRes, roomsRes] = await Promise.all([
+      const [reqRes, resourcesRes] = await Promise.all([
         api.get('/api/admin/room-requests?status=PENDING'),
-        api.get('/api/rooms')
+        api.get('/api/resources')
       ])
       setRequests(Array.isArray(reqRes.data) ? reqRes.data : [])
-      setRooms(Array.isArray(roomsRes.data) ? roomsRes.data : [])
+      setResources(Array.isArray(resourcesRes.data) ? resourcesRes.data : [])
     } catch (e) {
       setError('Failed to load data')
     } finally {
@@ -71,13 +73,50 @@ export default function AdminRoomApprovals() {
     load({ silent: false })
   }, [])
 
-  const approve = async (id, allocatedRoomId) => {
-    if (!allocatedRoomId) { setError('Select a room to allocate'); return }
+  const claim = async (id) => {
+    setError('')
+    try {
+      const res = await api.post(`/api/admin/room-requests/${id}/claim`)
+      const body = res?.data || {}
+      setRequests((prev) => prev.map((r) => {
+        if (r.id !== id) return r
+        return {
+          ...r,
+          claimedBy: body.claimedBy ?? r.claimedBy ?? currentUsername,
+          claimedAt: body.claimedAt ?? r.claimedAt,
+          claimExpiresAt: body.claimExpiresAt ?? r.claimExpiresAt,
+        }
+      }))
+      return { ok: true }
+    } catch (e) {
+      const status = e?.response?.status
+      const msg = typeof e?.response?.data === 'string'
+        ? e.response.data
+        : (e?.response?.data?.message || e?.message || 'Claim failed')
+      if (status === 409) {
+        const req = requests.find(r => r.id === id)
+        const by = req?.claimedBy ? String(req.claimedBy) : 'another admin'
+        setError(`Already claimed by ${by}`)
+      } else {
+        setError(String(msg))
+      }
+      return { ok: false, status }
+    }
+  }
+
+  const approve = async (id, allocatedResourceId) => {
+    if (!allocatedResourceId) { setError('Select a resource to allocate'); return }
     setError('')
     const req = requests.find(r => r.id === id)
     const group = req?.splitGroupId
     try {
-      await api.post(`/api/admin/room-requests/${id}/approve`, { allocatedRoomId })
+      const claimRes = await claim(id)
+      if (!claimRes.ok) return
+
+      await api.post(`/api/admin/room-requests/${id}/approve`, {
+        allocatedResourceId,
+        allocatedRoomId: allocatedResourceId,
+      })
       setRequests(prev => prev.filter(r => {
         if (r.id === id) return false
         if (group && r.splitGroupId === group) return false
@@ -91,6 +130,9 @@ export default function AdminRoomApprovals() {
   const reject = async (id) => {
     setError('')
     try {
+      const claimRes = await claim(id)
+      if (!claimRes.ok) return
+
       await api.post(`/api/admin/room-requests/${id}/reject`)
       setRequests(prev => prev.filter(r => r.id !== id))
     } catch (e) {
@@ -194,7 +236,16 @@ export default function AdminRoomApprovals() {
       ) : (
         <div className="space-y-4 pb-10">
           {requests.map(req => (
-            <ApprovalItem key={req.id} req={req} rooms={rooms} onApprove={approve} onReject={reject} hasRole={hasRole} />
+            <ApprovalItem
+              key={req.id}
+              req={req}
+              resources={resources}
+              onClaim={claim}
+              onApprove={approve}
+              onReject={reject}
+              hasRole={hasRole}
+              currentUsername={currentUsername}
+            />
           ))}
         </div>
       )}
@@ -202,18 +253,34 @@ export default function AdminRoomApprovals() {
   )
 }
 
-function ApprovalItem({ req, rooms, onApprove, onReject, hasRole }) {
+function ApprovalItem({ req, resources, onClaim, onApprove, onReject, hasRole, currentUsername }) {
   const [alloc, setAlloc] = useState('')
   const [conflicts, setConflicts] = useState(null)
   const [loadingConflicts, setLoadingConflicts] = useState(false)
 
+  const now = Date.now()
+  const expiresAtMs = req?.claimExpiresAt ? new Date(req.claimExpiresAt).getTime() : null
+  const isClaimExpired = expiresAtMs != null && Number.isFinite(expiresAtMs) && now >= expiresAtMs
+  const hasClaim = !!req?.claimedBy && !!req?.claimedAt
+  const claimedByMe = hasClaim && String(req.claimedBy) === String(currentUsername)
+  const canAct = claimedByMe && !isClaimExpired
+  const claimedByOtherActive = hasClaim && !claimedByMe && !isClaimExpired
+
   const isSuperRoomAdmin = hasRole('ADMIN')
-  const allocatableRooms = rooms.filter((r) => {
+  const allocatableResources = resources.filter((r) => {
     if (req.buildingId != null && r.buildingId != null && Number(r.buildingId) !== Number(req.buildingId)) {
       return false
     }
+
+    // Meeting requests must allocate ROOM only; event requests may allocate ROOM + OPEN_SPACE
+    const isMeeting = req.eventId == null
+    const rt = String(r.resourceType || r.type || '')
+    if (isMeeting && rt === 'OPEN_SPACE') {
+      return false
+    }
+
     if (!isSuperRoomAdmin && hasRole('BUILDING_ADMIN') && req.approvalScope) {
-      return roomMatchesApprovalScope(r.type, req.approvalScope)
+      return roomMatchesApprovalScope(r.resourceType || r.type, req.approvalScope)
     }
     return true
   })
@@ -277,6 +344,22 @@ function ApprovalItem({ req, rooms, onApprove, onReject, hasRole }) {
             </div>
           )}
           <div className="text-sm text-[#9CA3AF]">Requested by: {req.requestedBy}</div>
+
+          <div className="text-sm text-[#9CA3AF] mt-1">
+            Claim:
+            {!hasClaim && (
+              <span className="ml-1 text-[#9CA3AF]">Not claimed</span>
+            )}
+            {hasClaim && isClaimExpired && (
+              <span className="ml-1 text-amber-300">Expired (was {String(req.claimedBy)})</span>
+            )}
+            {hasClaim && !isClaimExpired && claimedByMe && (
+              <span className="ml-1 text-emerald-300">Claimed by you until {formatDateTime(req.claimExpiresAt)}</span>
+            )}
+            {hasClaim && !isClaimExpired && claimedByOtherActive && (
+              <span className="ml-1 text-rose-300">Claimed by {String(req.claimedBy)} until {formatDateTime(req.claimExpiresAt)}</span>
+            )}
+          </div>
           <div className="text-sm text-[#9CA3AF] mt-2">
             Preferences:
             <span className="font-semibold text-[#60A5FA] ml-1">{req.pref1}</span> →
@@ -324,18 +407,45 @@ function ApprovalItem({ req, rooms, onApprove, onReject, hasRole }) {
           </div>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => onClaim(req.id)}
+            disabled={canAct || claimedByOtherActive}
+            title={claimedByOtherActive ? 'Already claimed by another admin' : ''}
+          >
+            Claim
+          </button>
           <select
             className="form-select min-w-[12rem]"
             value={alloc}
             onChange={(e) => setAlloc(e.target.value)}
+            disabled={!canAct}
           >
-            <option value="" disabled>Allocate room...</option>
-            {allocatableRooms.map(r => (
-              <option key={r.id} value={r.id}>{r.buildingName ? `${r.buildingName} - ` : ''}{r.name} ({r.capacity || 0})</option>
+            <option value="" disabled>Allocate resource...</option>
+            {allocatableResources.map(r => (
+              <option key={r.id} value={r.id}>
+                {r.buildingName ? `${r.buildingName} - ` : ''}{r.name}
+                {r.resourceType ? ` [${r.resourceType}]` : ''} ({r.capacity || 0})
+              </option>
             ))}
           </select>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => onApprove(req.id, Number(alloc))}>Approve</button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onReject(req.id)}>Reject</button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={!canAct}
+            onClick={() => onApprove(req.id, Number(alloc))}
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={!canAct}
+            onClick={() => onReject(req.id)}
+          >
+            Reject
+          </button>
         </div>
       </div>
     </div>

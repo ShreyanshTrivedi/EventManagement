@@ -59,7 +59,7 @@ export default function RoomBooking() {
     setEventsError('')
     try {
       const [roomsRes, eventsRes, buildingsRes] = await Promise.allSettled([
-        api.get('/api/rooms'),
+        api.get('/api/resources'),
         api.get('/api/events/mine'),
         api.get('/api/room-management/buildings')
       ])
@@ -150,7 +150,7 @@ export default function RoomBooking() {
         const [startStr, endStr] = slot.split('-')
         const start = toLocalIsoNoSeconds(dateStr, startStr)
         const end = toLocalIsoNoSeconds(dateStr, endStr)
-        const res = await api.get(`/api/rooms/${roomId}/availability`, { params: { start, end } })
+        const res = await api.get(`/api/resources/${roomId}/availability`, { params: { start, end } })
         const ok = !!(res.data && (res.data.available === true || res.data.available === 'true'))
         return [slot, ok]
       })
@@ -227,10 +227,12 @@ export default function RoomBooking() {
     if (!start || !end) return
     try {
       setRoomWindowLoading(true)
-      const res = await api.get('/api/rooms/availability', { params: { start, end } })
+      const res = await api.get('/api/resources/availability', { params: { start, end } })
       const map = {}
       ;(res.data || []).forEach(x => {
-        if (x && (x.roomId != null)) map[Number(x.roomId)] = !!x.available
+        if (!x) return
+        const rid = x.resourceId != null ? Number(x.resourceId) : (x.roomId != null ? Number(x.roomId) : (x.id != null ? Number(x.id) : null))
+        if (rid != null) map[rid] = !!x.available
       })
       setRoomWindowAvailability(map)
     } catch {
@@ -277,7 +279,7 @@ export default function RoomBooking() {
       start = toLocalDateTimeSeconds(meetingStart)
       end = toLocalDateTimeSeconds(meetingEnd)
     }
-    api.get(`/api/rooms/${roomId}/availability`, { params: { start, end } })
+    api.get(`/api/resources/${roomId}/availability`, { params: { start, end } })
       .then(res => {
         const available = !!(res.data && (res.data.available === true || res.data.available === 'true'))
         setRoomConflicts([{
@@ -314,6 +316,9 @@ export default function RoomBooking() {
 
         const payload = {
           buildingId: Number(selectedBuildingId),
+          pref1ResourceId: Number(pref1),
+          pref2ResourceId: Number(pref2),
+          pref3ResourceId: Number(pref3),
           pref1RoomId: Number(pref1),
           pref2RoomId: Number(pref2),
           pref3RoomId: Number(pref3),
@@ -338,6 +343,7 @@ export default function RoomBooking() {
         if (!meetingStart || !meetingEnd || !meetingPurpose) { setMessage('Please provide meeting start, end, and purpose'); return }
 
         const payload = {
+          resourceId: Number(pref1),
           roomId: Number(pref1),
           buildingId: Number(selectedBuildingId),
           purpose: meetingPurpose,
@@ -374,7 +380,9 @@ export default function RoomBooking() {
   }
 
   const filteredRooms = selectedBuildingId
-    ? rooms.filter(r => String(r.buildingId) === String(selectedBuildingId))
+    ? rooms.filter(r =>
+        String(r.buildingId) === String(selectedBuildingId) &&
+        (mode === 'event' || r.resourceType !== 'OPEN_SPACE'))
     : []
   const selectedRoomInfo = rooms.find(room => room.id === Number(pref1))
 
@@ -635,7 +643,7 @@ export default function RoomBooking() {
                       const disabled = hasWindow ? !ok : false
                       return (
                         <option key={room.id} value={room.id} disabled={disabled}>
-                          {room.name}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
+                          {room.name}{room.resourceType ? ` [${room.resourceType}]` : ''}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
                           {hasWindow ? (ok ? ' — AVAILABLE' : ' — OCCUPIED') : ''}
                         </option>
                       )
@@ -674,7 +682,7 @@ export default function RoomBooking() {
                           const disabled = hasWindow ? !ok : false
                           return (
                             <option key={room.id} value={room.id} disabled={disabled}>
-                              {room.name}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
+                              {room.name}{room.resourceType ? ` [${room.resourceType}]` : ''}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
                               {hasWindow ? (ok ? ' — AVAILABLE' : ' — OCCUPIED') : ''}
                             </option>
                           )
@@ -698,7 +706,7 @@ export default function RoomBooking() {
                           const disabled = hasWindow ? !ok : false
                           return (
                             <option key={room.id} value={room.id} disabled={disabled}>
-                              {room.name}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
+                              {room.name}{room.resourceType ? ` [${room.resourceType}]` : ''}{room.location ? ` - ${room.location}` : ''} (Capacity: {room.capacity})
                               {hasWindow ? (ok ? ' — AVAILABLE' : ' — OCCUPIED') : ''}
                             </option>
                           )

@@ -64,7 +64,7 @@ public class DataInitializationService implements CommandLineRunner {
         }
     }
     
-    private void addFixedClass(Room room, String courseName, String courseCode, String section,
+    private void addFixedClass(Resource room, String courseName, String courseCode, String section,
                               String semester, String batch, DayOfWeek dayOfWeek, 
                               LocalTime startTime, LocalTime endTime) {
         try {

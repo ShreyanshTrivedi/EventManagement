@@ -1,10 +1,14 @@
 package com.campus.event.service;
 
+import com.campus.event.domain.Booking;
 import com.campus.event.domain.Event;
-import com.campus.event.domain.RoomBookingRequest;
+import com.campus.event.domain.Resource;
+import com.campus.event.domain.ResourceBookingRequest;
 import com.campus.event.domain.RoomBookingStatus;
+import com.campus.event.repository.BookingRepository;
 import com.campus.event.repository.FixedTimetableRepository;
-import com.campus.event.repository.RoomBookingRequestRepository;
+import com.campus.event.repository.ResourceRepository;
+import com.campus.event.repository.ResourceBookingRequestRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -13,57 +17,78 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Single source of truth for availability of any bookable unit (rooms and open spaces).
+ *
+ * <p>Checks three reservation sources in order:
+ * <ol>
+ *   <li>{@code fixed_timetable}       — immovable academic timetable slots (rooms only)
+ *   <li>{@code room_booking_requests} — event bookings (APPROVED/CONFIRMED), keyed by room
+ *   <li>{@code bookings}              — direct bookings, checked by <em>resource_id</em>
+ *                                       first (new path), then by <em>room_id</em> (legacy)
+ * </ol>
+ */
 @Service
 public class RoomAvailabilityService {
-    private final RoomBookingRequestRepository requestRepo;
+
+    private final ResourceBookingRequestRepository requestRepo;
     private final FixedTimetableRepository fixedTimetableRepository;
+    private final BookingRepository bookingRepository;
+    private final ResourceRepository resourceRepository;
 
     @Autowired
-    public RoomAvailabilityService(RoomBookingRequestRepository requestRepo,
-                                   FixedTimetableRepository fixedTimetableRepository) {
+    public RoomAvailabilityService(ResourceBookingRequestRepository requestRepo,
+                                   FixedTimetableRepository fixedTimetableRepository,
+                                   BookingRepository bookingRepository,
+                                   ResourceRepository resourceRepository) {
         this.requestRepo = requestRepo;
         this.fixedTimetableRepository = fixedTimetableRepository;
+        this.bookingRepository = bookingRepository;
+        this.resourceRepository = resourceRepository;
     }
 
-    // Backward-compatible constructor for existing unit tests
-    public RoomAvailabilityService(RoomBookingRequestRepository requestRepo) {
-        this(requestRepo, null);
+    public boolean isResourceAvailable(Long resourceId, LocalDateTime start, LocalDateTime end) {
+        Resource resource = resourceRepository.findById(resourceId).orElse(null);
+        if (resource == null) return false;
+
+        if (hasFixedTimetableConflict(resourceId, start, end)) return false;
+        if (hasEventBookingConflict(resourceId, start, end)) return false;
+
+        return bookingRepository.findOverlappingByResource(resourceId, start, end).isEmpty();
     }
 
-    public boolean isRoomAvailable(Long roomId, LocalDateTime start, LocalDateTime end) {
-        if (hasFixedTimetableConflict(roomId, start, end)) {
-            return false;
-        }
-        List<RoomBookingRequest> existing = requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED));
+    public Map<Long, Boolean> availabilityForResources(List<Long> resourceIds,
+                                                        LocalDateTime start,
+                                                        LocalDateTime end) {
+        return resourceIds.stream().collect(Collectors.toMap(
+                id -> id, id -> isResourceAvailable(id, start, end)));
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private boolean hasEventBookingConflict(Long resourceId, LocalDateTime start, LocalDateTime end) {
+        List<ResourceBookingRequest> existing = requestRepo.findByStatusIn(
+                Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED));
         return existing.stream()
-                .filter(b -> b.getAllocatedRoom() != null && b.getAllocatedRoom().getId().equals(roomId))
-                .noneMatch(b -> overlaps(windowStart(b), windowEnd(b), start, end));
+                .filter(b -> b.getAllocatedResource() != null
+                        && b.getAllocatedResource().getId().equals(resourceId))
+                .anyMatch(b -> overlaps(windowStart(b), windowEnd(b), start, end));
     }
 
-    public Map<Long, Boolean> availabilityForRooms(List<Long> roomIds, LocalDateTime start, LocalDateTime end) {
-        List<RoomBookingRequest> existing = requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED));
-        return roomIds.stream().collect(Collectors.toMap(
-                id -> id,
-                id -> !hasFixedTimetableConflict(id, start, end) && existing.stream()
-                        .filter(b -> b.getAllocatedRoom() != null && b.getAllocatedRoom().getId().equals(id))
-                        .noneMatch(b -> overlaps(windowStart(b), windowEnd(b), start, end))
-        ));
-    }
-
-    private boolean hasFixedTimetableConflict(Long roomId, LocalDateTime start, LocalDateTime end) {
-        if (roomId == null || start == null || end == null || !start.isBefore(end)) {
-            return false;
-        }
+    private boolean hasFixedTimetableConflict(Long resourceId, LocalDateTime start, LocalDateTime end) {
+        if (resourceId == null || start == null || end == null || !start.isBefore(end)) return false;
         LocalDate date = start.toLocalDate();
         LocalDate endDate = end.toLocalDate();
         while (!date.isAfter(endDate)) {
             LocalTime dayStart = date.isEqual(start.toLocalDate()) ? start.toLocalTime() : LocalTime.MIN;
-            LocalTime dayEnd = date.isEqual(endDate) ? end.toLocalTime() : LocalTime.MAX;
+            LocalTime dayEnd   = date.isEqual(endDate)             ? end.toLocalTime()   : LocalTime.MAX;
             if (fixedTimetableRepository != null
-                    && fixedTimetableRepository.existsConflictingClass(roomId, date.getDayOfWeek(), dayStart, dayEnd)) {
+                    && fixedTimetableRepository.existsConflictingClass(
+                            resourceId, date.getDayOfWeek(), dayStart, dayEnd)) {
                 return true;
             }
             date = date.plusDays(1);
@@ -71,21 +96,19 @@ public class RoomAvailabilityService {
         return false;
     }
 
-    private static boolean overlaps(LocalDateTime aStart, LocalDateTime aEnd, LocalDateTime bStart, LocalDateTime bEnd) {
-        if (aStart == null || aEnd == null || bStart == null || bEnd == null) return false;
-        return aStart.isBefore(bEnd) && bStart.isBefore(aEnd);
+    private static boolean overlaps(LocalDateTime aS, LocalDateTime aE,
+                                     LocalDateTime bS, LocalDateTime bE) {
+        if (aS == null || aE == null || bS == null || bE == null) return false;
+        return aS.isBefore(bE) && bS.isBefore(aE);
     }
 
-    private static LocalDateTime windowStart(RoomBookingRequest r) {
+    private static LocalDateTime windowStart(ResourceBookingRequest r) {
         Event e = r.getEvent();
-        if (e != null && e.getStartTime() != null) return e.getStartTime();
-        return r.getMeetingStart();
-        
+        return (e != null && e.getStartTime() != null) ? e.getStartTime() : r.getMeetingStart();
     }
 
-    private static LocalDateTime windowEnd(RoomBookingRequest r) {
+    private static LocalDateTime windowEnd(ResourceBookingRequest r) {
         Event e = r.getEvent();
-        if (e != null && e.getEndTime() != null) return e.getEndTime();
-        return r.getMeetingEnd();
+        return (e != null && e.getEndTime() != null) ? e.getEndTime() : r.getMeetingEnd();
     }
 }

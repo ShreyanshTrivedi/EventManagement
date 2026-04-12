@@ -18,8 +18,8 @@ public class FixedTimetable {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "room_id")
-    private Room room;
+    @JoinColumn(name = "resource_id")
+    private Resource resource;
 
     @NotBlank
     private String courseName;
@@ -51,10 +51,10 @@ public class FixedTimetable {
     public FixedTimetable() {
     }
 
-    public FixedTimetable(Room room, String courseName, String courseCode, String section, 
+    public FixedTimetable(Resource resource, String courseName, String courseCode, String section, 
                         String semester, String batch, User faculty, DayOfWeek dayOfWeek, 
                         LocalTime startTime, LocalTime endTime, String academicYear) {
-        this.room = room;
+        this.resource = resource;
         this.courseName = courseName;
         this.courseCode = courseCode;
         this.section = section;
@@ -69,8 +69,8 @@ public class FixedTimetable {
     
     // Explicit getters and setters to ensure they exist
     public Long getId() { return id; }
-    public Room getRoom() { return room; }
-    public void setRoom(Room room) { this.room = room; }
+    public Resource getResource() { return resource; }
+    public void setResource(Resource resource) { this.resource = resource; }
     public String getCourseName() { return courseName; }
     public void setCourseName(String courseName) { this.courseName = courseName; }
     public String getCourseCode() { return courseCode; }

@@ -5,7 +5,7 @@ import com.campus.event.domain.Event;
 import com.campus.event.domain.User;
 import com.campus.event.repository.BuildingRepository;
 import com.campus.event.repository.EventRepository;
-import com.campus.event.repository.RoomBookingRequestRepository;
+import com.campus.event.repository.ResourceBookingRequestRepository;
 import com.campus.event.repository.UserRepository;
 import com.campus.event.service.EventService;
 import com.campus.event.repository.EventRegistrationRepository;
@@ -34,14 +34,14 @@ public class EventController {
     private final com.campus.event.service.BuildingTimetableService buildingTimetableService;
     private final EventRegistrationRepository registrationRepository;
     private final NotificationService notificationService;
-    private final RoomBookingRequestRepository roomBookingRequestRepository;
+    private final ResourceBookingRequestRepository resourceBookingRequestRepository;
 
     public EventController(EventService eventService, UserRepository userRepository,
                            EventRepository eventRepository, BuildingRepository buildingRepository,
                            com.campus.event.service.BuildingTimetableService buildingTimetableService,
                            EventRegistrationRepository registrationRepository,
                            NotificationService notificationService,
-                           RoomBookingRequestRepository roomBookingRequestRepository) {
+                           ResourceBookingRequestRepository resourceBookingRequestRepository) {
         this.eventService = eventService;
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
@@ -49,7 +49,7 @@ public class EventController {
         this.buildingTimetableService = buildingTimetableService;
         this.registrationRepository = registrationRepository;
         this.notificationService = notificationService;
-        this.roomBookingRequestRepository = roomBookingRequestRepository;
+        this.resourceBookingRequestRepository = resourceBookingRequestRepository;
     }
 
     @PostMapping
@@ -208,7 +208,11 @@ public class EventController {
             m.put("maxAttendees", e.getMaxAttendees());
             m.put("buildingId", e.getBuilding() != null ? e.getBuilding().getId() : null);
             m.put("buildingName", e.getBuilding() != null ? e.getBuilding().getName() : null);
-            boolean hasApprovedBooking = roomBookingRequestRepository.existsByEvent_IdAndStatusIn(
+            m.put("timingModel", e.getTimingModel() != null ? e.getTimingModel().name() : null);
+            // Status field — authoritative lifecycle state
+            m.put("status", e.getStatus() != null ? e.getStatus().name() : "PENDING");
+            // Legacy proxy — kept for backward-compatible frontend checks
+            boolean hasApprovedBooking = resourceBookingRequestRepository.existsByEvent_IdAndStatusIn(
                     e.getId(),
                     Set.of(com.campus.event.domain.RoomBookingStatus.APPROVED, com.campus.event.domain.RoomBookingStatus.CONFIRMED));
             m.put("hasApprovedBooking", hasApprovedBooking);

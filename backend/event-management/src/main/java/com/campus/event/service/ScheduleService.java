@@ -17,30 +17,30 @@ import java.util.stream.Collectors;
 public class ScheduleService {
     
     private final FixedTimetableRepository fixedTimetableRepository;
-    private final RoomRepository roomRepository;
-    private final RoomBookingRequestRepository bookingRepository;
+    private final ResourceRepository resourceRepository;
+    private final ResourceBookingRequestRepository bookingRepository;
     private final UserRepository userRepository;
     private final BuildingTimetableService buildingTimetableService;
 
     public ScheduleService(FixedTimetableRepository fixedTimetableRepository,
-                         RoomRepository roomRepository,
-                         RoomBookingRequestRepository bookingRepository,
+                         ResourceRepository resourceRepository,
+                         ResourceBookingRequestRepository bookingRepository,
                          UserRepository userRepository,
                          BuildingTimetableService buildingTimetableService) {
         this.fixedTimetableRepository = fixedTimetableRepository;
-        this.roomRepository = roomRepository;
+        this.resourceRepository = resourceRepository;
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.buildingTimetableService = buildingTimetableService;
     }
     
     // Fixed Timetable operations
-    public List<FixedTimetable> getRoomWeeklySchedule(Long roomId) {
-        return fixedTimetableRepository.findByRoomIdOrderByDayOfWeekAscStartTimeAsc(roomId);
+    public List<FixedTimetable> getRoomWeeklySchedule(Long resourceId) {
+        return fixedTimetableRepository.findByResourceIdOrderByDayOfWeekAscStartTimeAsc(resourceId);
     }
     
-    public List<FixedTimetable> getRoomDaySchedule(Long roomId, DayOfWeek dayOfWeek) {
-        return fixedTimetableRepository.getRoomDaySchedule(roomId, dayOfWeek);
+    public List<FixedTimetable> getRoomDaySchedule(Long resourceId, DayOfWeek dayOfWeek) {
+        return fixedTimetableRepository.getRoomDaySchedule(resourceId, dayOfWeek);
     }
     
     public List<FixedTimetable> getAllFixedTimetables() {
@@ -49,10 +49,10 @@ public class ScheduleService {
     
     public FixedTimetable addFixedClass(FixedTimetableRequest request) {
         if (request.getRoomId() == null) {
-            throw new IllegalArgumentException("Room ID cannot be null");
+            throw new IllegalArgumentException("Resource ID cannot be null");
         }
-        Room room = roomRepository.findById(request.getRoomId())
-            .orElseThrow(() -> new IllegalArgumentException("Room not found"));
+        Resource resource = resourceRepository.findById(request.getRoomId())
+            .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
             
         User faculty = request.getFacultyId() != null ? 
             userRepository.findById(request.getFacultyId()).orElse(null) : null;
@@ -64,7 +64,7 @@ public class ScheduleService {
         }
         
         FixedTimetable timetable = new FixedTimetable(
-            room, request.getCourseName(), request.getCourseCode(), request.getSection(),
+            resource, request.getCourseName(), request.getCourseCode(), request.getSection(),
             request.getSemester(), request.getBatch(), faculty, request.getDayOfWeek(),
             request.getStartTime(), request.getEndTime(), request.getAcademicYear()
         );
@@ -73,23 +73,23 @@ public class ScheduleService {
     }
     
     // Collision detection
-    public boolean hasTimeSlotConflict(Long roomId, DayOfWeek dayOfWeek, 
+    public boolean hasTimeSlotConflict(Long resourceId, DayOfWeek dayOfWeek, 
                                      LocalTime startTime, LocalTime endTime) {
-        return fixedTimetableRepository.existsByRoomIdAndDayOfWeekAndStartTimeBeforeAndEndTimeAfterAndIsActiveTrue(
-            roomId, dayOfWeek, endTime, startTime
+        return fixedTimetableRepository.existsByResourceIdAndDayOfWeekAndStartTimeBeforeAndEndTimeAfterAndIsActiveTrue(
+            resourceId, dayOfWeek, endTime, startTime
         );
     }
     
-    public boolean hasBookingConflict(Long roomId, LocalDate date, 
+    public boolean hasBookingConflict(Long resourceId, LocalDate date, 
                                     LocalTime startTime, LocalTime endTime) {
         DayOfWeek dayOfWeek = date.getDayOfWeek();
         
         // Check against fixed timetable
-        boolean hasFixedConflict = hasTimeSlotConflict(roomId, dayOfWeek, startTime, endTime);
+        boolean hasFixedConflict = hasTimeSlotConflict(resourceId, dayOfWeek, startTime, endTime);
         if (hasFixedConflict) return true;
         
         // Check against existing bookings
-        List<RoomBookingRequest> conflictingBookings = bookingRepository.findConflictingBookings(roomId, 
+        List<ResourceBookingRequest> conflictingBookings = bookingRepository.findConflictingBookings(resourceId, 
             LocalDateTime.of(date, startTime), LocalDateTime.of(date, endTime));
         return !conflictingBookings.isEmpty();
     }
@@ -135,20 +135,20 @@ public class ScheduleService {
         return conflicts;
     }
 
-    public List<String> getRoomConflicts(Long roomId, LocalDateTime start, LocalDateTime end) {
+    public List<String> getRoomConflicts(Long resourceId, LocalDateTime start, LocalDateTime end) {
         List<String> messages = new ArrayList<>();
-        Room room = roomRepository.findById(roomId).orElse(null);
-        if (room == null) return messages;
+        Resource resource = resourceRepository.findById(resourceId).orElse(null);
+        if (resource == null) return messages;
 
-        Long buildingId = room.getFloor() != null && room.getFloor().getBuilding() != null
-                ? room.getFloor().getBuilding().getId() : null;
+        Long buildingId = resource.getFloor() != null && resource.getFloor().getBuilding() != null
+                ? resource.getFloor().getBuilding().getId() : null;
         if (buildingId != null && !buildingTimetableService.isBookingWithinBuildingHours(buildingId, start, end)) {
             messages.add("Requested time is outside this building's operating hours (see building timetable).");
         }
 
         // Check against existing bookings for the whole period
-        List<RoomBookingRequest> conflictingBookings = bookingRepository.findConflictingBookings(roomId, start, end);
-        for (RoomBookingRequest b : conflictingBookings) {
+        List<ResourceBookingRequest> conflictingBookings = bookingRepository.findConflictingBookings(resourceId, start, end);
+        for (ResourceBookingRequest b : conflictingBookings) {
             String title = b.getEvent() != null ? b.getEvent().getTitle() : b.getMeetingPurpose();
             messages.add("Booking conflict: " + title);
         }
@@ -165,7 +165,7 @@ public class ScheduleService {
             LocalTime checkStart = (currentDate.isEqual(start.toLocalDate())) ? timeStart : LocalTime.MIN;
             LocalTime checkEnd = (currentDate.isEqual(endDate)) ? timeEnd : LocalTime.MAX;
 
-            List<FixedTimetable> timetableConflicts = fixedTimetableRepository.findByRoomIdOrderByDayOfWeekAscStartTimeAsc(roomId).stream()
+            List<FixedTimetable> timetableConflicts = fixedTimetableRepository.findByResourceIdOrderByDayOfWeekAscStartTimeAsc(resourceId).stream()
                 .filter(ft -> ft.isActive() && ft.getDayOfWeek() == day &&
                         ft.getStartTime().isBefore(checkEnd) && ft.getEndTime().isAfter(checkStart))
                 .collect(Collectors.toList());
@@ -180,11 +180,11 @@ public class ScheduleService {
         return messages;
     }
     
-    public List<String> getAvailableSlots(Long roomId, LocalDate date) {
+    public List<String> getAvailableSlots(Long resourceId, LocalDate date) {
         List<String> availableSlots = new ArrayList<>();
         
         for (TimeSlot slot : TimeSlot.values()) {
-            if (!hasBookingConflict(roomId, date, slot.getStart(), slot.getEnd())) {
+            if (!hasBookingConflict(resourceId, date, slot.getStart(), slot.getEnd())) {
                 availableSlots.add(slot.getDisplayName());
             }
         }
@@ -193,12 +193,12 @@ public class ScheduleService {
     }
     
     // Combined schedule for a specific day
-    public List<ScheduleItem> getRoomCombinedSchedule(Long roomId, LocalDate date) {
+    public List<ScheduleItem> getRoomCombinedSchedule(Long resourceId, LocalDate date) {
         List<ScheduleItem> scheduleItems = new ArrayList<>();
         
         // Get fixed classes for that day
         DayOfWeek dayOfWeek = date.getDayOfWeek();
-        List<FixedTimetable> fixedClasses = getRoomDaySchedule(roomId, dayOfWeek);
+        List<FixedTimetable> fixedClasses = getRoomDaySchedule(resourceId, dayOfWeek);
         
         // Convert fixed classes to schedule items
         for (FixedTimetable ft : fixedClasses) {
@@ -213,10 +213,10 @@ public class ScheduleService {
         }
         
         // Get bookings for that day
-        List<RoomBookingRequest> bookings = bookingRepository.findByAllocatedRoomIdAndDateBookings(roomId, date);
+        List<ResourceBookingRequest> bookings = bookingRepository.findByAllocatedResourceIdAndDateBookings(resourceId, date);
         
         // Convert bookings to schedule items
-        for (RoomBookingRequest booking : bookings) {
+        for (ResourceBookingRequest booking : bookings) {
             if (booking.getStatus() == RoomBookingStatus.APPROVED || booking.getStatus() == RoomBookingStatus.CONFIRMED) {
                 ScheduleItem item = new ScheduleItem();
                 item.setType("BOOKING");

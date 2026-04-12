@@ -68,7 +68,8 @@ public class AuthController {
                 })
                 .orElseGet(() -> {
                     log.debug("Login attempt user='{}' not found", uname);
-                    return ResponseEntity.status(404).body(Map.<String, Object>of("error", "User not found"));
+                    // Return 401 (not 404) to prevent username enumeration
+                    return ResponseEntity.status(401).body(Map.<String, Object>of("error", "Invalid credentials"));
                 });
     }
 
@@ -168,6 +169,8 @@ public class AuthController {
         
         User user = resetToken.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        // Invalidate any active session — existing tokens must not survive a reset
+        user.setActiveSessionToken(null);
         userRepository.save(user);
         
         resetToken.setUsed(true);

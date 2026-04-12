@@ -25,13 +25,14 @@ const EnhancedEventBooking = () => {
   const [club, setClub] = useState(clubId || '')
   const [selected, setSelected] = useState(['full_name', 'email'])
   
-  // Room Booking
+  // Room / resource booking (unified resources API)
   const [buildings, setBuildings] = useState([])
   const [selectedBuilding, setSelectedBuilding] = useState('')
-  const [floors, setFloors] = useState([])
-  const [selectedFloor, setSelectedFloor] = useState('')
-  const [rooms, setRooms] = useState([])
+  const [resources, setResources] = useState([])
   const [selectedRoom, setSelectedRoom] = useState('')
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [loc, setLoc] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [availableSlots, setAvailableSlots] = useState([])
   const [selectedSlots, setSelectedSlots] = useState([])
@@ -60,19 +61,25 @@ const EnhancedEventBooking = () => {
     }
   }, [needsRoom])
 
-  // Fetch floors when building selected
   useEffect(() => {
-    if (selectedBuilding) {
-      fetchFloors(selectedBuilding)
+    const loadResources = async () => {
+      if (!selectedBuilding) {
+        setResources([])
+        setSelectedRoom('')
+        return
+      }
+      try {
+        const response = await api.get('/api/resources', { params: { buildingId: selectedBuilding } })
+        setResources(response.data || [])
+        setSelectedRoom('')
+        setSelectedSlots([])
+      } catch (error) {
+        console.error('Failed to fetch resources:', error)
+        setError('Failed to load resources. Please try again.')
+      }
     }
+    loadResources()
   }, [selectedBuilding])
-
-  // Fetch rooms when floor selected
-  useEffect(() => {
-    if (selectedFloor) {
-      fetchRooms(selectedFloor)
-    }
-  }, [selectedFloor])
 
   // Check availability when room and date selected
   useEffect(() => {
@@ -89,32 +96,6 @@ const EnhancedEventBooking = () => {
     } catch (error) {
       console.error('Failed to fetch buildings:', error)
       setError('Failed to load buildings. Please try again.')
-    }
-  }
-
-  const fetchFloors = async (buildingId) => {
-    try {
-      const response = await api.get(`/api/room-management/buildings/${buildingId}/floors`)
-      setFloors(response.data)
-      setSelectedFloor('')
-      setRooms([])
-      setSelectedRoom('')
-      setSelectedSlots([])
-    } catch (error) {
-      console.error('Failed to fetch floors:', error)
-      setError('Failed to load floors. Please try again.')
-    }
-  }
-
-  const fetchRooms = async (floorId) => {
-    try {
-      const response = await api.get(`/api/room-management/floors/${floorId}/rooms`)
-      setRooms(response.data)
-      setSelectedRoom('')
-      setSelectedSlots([])
-    } catch (error) {
-      console.error('Failed to fetch rooms:', error)
-      setError('Failed to load rooms. Please try again.')
     }
   }
 
@@ -214,14 +195,17 @@ const EnhancedEventBooking = () => {
       }
 
       if (needsRoom && selectedRoom && selectedDate && selectedSlots.length > 0) {
-        // Add room booking details
         const startTime = selectedSlots[0].split('-')[0]
         const endTime = selectedSlots[selectedSlots.length - 1].split('-')[1]
-        
-        eventData.start = `${selectedDate} ${startTime}:00`
-        eventData.end = `${selectedDate} ${endTime}:00`
-        eventData.location = `Room ${rooms.find(r => r.id.toString() === selectedRoom)?.roomNumber}`
-        eventData.roomId = selectedRoom
+        eventData.start = `${selectedDate}T${startTime}:00`
+        eventData.end = `${selectedDate}T${endTime}:00`
+        eventData.buildingId = Number(selectedBuilding)
+        const res = resources.find(r => r.id.toString() === selectedRoom)
+        eventData.location = res
+          ? `${res.name}${res.resourceType ? ` (${res.resourceType})` : ''}`
+          : 'TBD'
+        eventData.resourceId = Number(selectedRoom)
+        eventData.roomId = Number(selectedRoom)
       } else {
         // Manual time entry if no room booking
         const startValue = start ? `${start}:00` : null
@@ -252,7 +236,7 @@ const EnhancedEventBooking = () => {
   }
 
   const getSelectedRoomDetails = () => {
-    return rooms.find(room => room.id.toString() === selectedRoom)
+    return resources.find(room => room.id.toString() === selectedRoom)
   }
 
   const getSlotSelectionInfo = () => {
@@ -349,7 +333,7 @@ const EnhancedEventBooking = () => {
         {needsRoom && (
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-semibold mb-4">Select Room & Time</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium mb-2">Building</label>
                 <select
@@ -367,34 +351,17 @@ const EnhancedEventBooking = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-2">Floor</label>
-                <select
-                  value={selectedFloor}
-                  onChange={(e) => setSelectedFloor(e.target.value)}
-                  className="w-full p-2 border rounded"
-                  disabled={!selectedBuilding}
-                >
-                  <option value="">Select Floor</option>
-                  {floors.map(floor => (
-                    <option key={floor.id} value={floor.id}>
-                      {floor.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Room</label>
+                <label className="block text-sm font-medium mb-2">Resource (room or open space)</label>
                 <select
                   value={selectedRoom}
                   onChange={(e) => setSelectedRoom(e.target.value)}
                   className="w-full p-2 border rounded"
-                  disabled={!selectedFloor}
+                  disabled={!selectedBuilding}
                 >
-                  <option value="">Select Room</option>
-                  {rooms.map(room => (
+                  <option value="">Select Resource</option>
+                  {resources.map(room => (
                     <option key={room.id} value={room.id}>
-                      {room.roomNumber} - {room.name} (Capacity: {room.capacity})
+                      {room.name} — {room.resourceType || 'ROOM'} (Capacity: {room.capacity ?? '—'})
                     </option>
                   ))}
                 </select>
@@ -415,12 +382,12 @@ const EnhancedEventBooking = () => {
             {/* Room Details */}
             {selectedRoom && getSelectedRoomDetails() && (
               <div className="bg-gray-50 p-4 rounded mb-4">
-                <h4 className="font-medium mb-2">Room Details</h4>
+                <h4 className="font-medium mb-2">Resource details</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div><strong>Room:</strong> {getSelectedRoomDetails().roomNumber}</div>
-                  <div><strong>Type:</strong> {getSelectedRoomDetails().type}</div>
-                  <div><strong>Capacity:</strong> {getSelectedRoomDetails().capacity}</div>
-                  <div><strong>Amenities:</strong> {getSelectedRoomDetails().amenities}</div>
+                  <div><strong>Name:</strong> {getSelectedRoomDetails().name}</div>
+                  <div><strong>Type:</strong> {getSelectedRoomDetails().resourceType || '—'}</div>
+                  <div><strong>Capacity:</strong> {getSelectedRoomDetails().capacity ?? '—'}</div>
+                  <div><strong>Amenities:</strong> {getSelectedRoomDetails().amenities || '—'}</div>
                 </div>
               </div>
             )}

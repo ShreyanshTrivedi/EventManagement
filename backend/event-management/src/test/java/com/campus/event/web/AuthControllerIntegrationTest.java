@@ -152,7 +152,7 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    void login_unknownUser_returns404() throws Exception {
+    void login_unknownUser_returns401WithoutEnumeration() throws Exception {
         String body = """
                 {"username":"noone","password":"Pass@123"}
                 """;
@@ -160,7 +160,7 @@ class AuthControllerIntegrationTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("User not found"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Invalid credentials"));
     }
 }

@@ -1,65 +1,93 @@
 package com.campus.event.service;
 
-import com.campus.event.domain.Room;
-import com.campus.event.domain.RoomBookingRequest;
+import com.campus.event.domain.Event;
+import com.campus.event.domain.Resource;
+import com.campus.event.domain.ResourceBookingRequest;
+import com.campus.event.domain.ResourceType;
 import com.campus.event.domain.RoomBookingStatus;
-import com.campus.event.repository.RoomBookingRequestRepository;
+import com.campus.event.repository.BookingRepository;
+import com.campus.event.repository.FixedTimetableRepository;
+import com.campus.event.repository.ResourceBookingRequestRepository;
+import com.campus.event.repository.ResourceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class RoomAvailabilityServiceTest {
 
     @Mock
-    private RoomBookingRequestRepository requestRepo;
+    private ResourceBookingRequestRepository requestRepo;
+
+    @Mock
+    private FixedTimetableRepository fixedTimetableRepository;
+
+    @Mock
+    private BookingRepository bookingRepository;
+
+    @Mock
+    private ResourceRepository resourceRepository;
 
     @InjectMocks
     private RoomAvailabilityService availabilityService;
 
-    private Room room1;
-    private Room room2;
+    private Resource resource1;
+    private Resource resource2;
 
     @BeforeEach
     void setUp() {
-        room1 = new Room();
-        room1.setId(1L);
-        room1.setRoomNumber("R101");
+        resource1 = mock(Resource.class);
+        when(resource1.getId()).thenReturn(1L);
+        when(resource1.getResourceType()).thenReturn(ResourceType.ROOM);
+        when(resource1.getName()).thenReturn("R101");
 
-        room2 = new Room();
-        room2.setId(2L);
-        room2.setRoomNumber("R102");
+        resource2 = mock(Resource.class);
+        when(resource2.getId()).thenReturn(2L);
+        when(resource2.getResourceType()).thenReturn(ResourceType.ROOM);
+        when(resource2.getName()).thenReturn("R102");
     }
 
     @Test
-    void isRoomAvailable_noConflicts_returnsTrue() {
+    void isResourceAvailable_noConflicts_returnsTrue() {
+        when(resourceRepository.findById(1L)).thenReturn(Optional.of(resource1));
+        when(fixedTimetableRepository.existsConflictingClass(any(), any(), any(), any())).thenReturn(false);
         when(requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED)))
                 .thenReturn(List.of());
+        when(bookingRepository.findOverlappingByResource(eq(1L), any(), any())).thenReturn(List.of());
 
         LocalDateTime start = LocalDateTime.now().plusDays(1);
         LocalDateTime end = start.plusHours(2);
 
-        assertTrue(availabilityService.isRoomAvailable(1L, start, end));
+        assertTrue(availabilityService.isResourceAvailable(1L, start, end));
     }
 
     @Test
-    void isRoomAvailable_overlappingBooking_returnsFalse() {
+    void isResourceAvailable_overlappingBooking_returnsFalse() {
+        when(resourceRepository.findById(1L)).thenReturn(Optional.of(resource1));
+        when(fixedTimetableRepository.existsConflictingClass(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.findOverlappingByResource(eq(1L), any(), any())).thenReturn(List.of());
+
         LocalDateTime bookingStart = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
         LocalDateTime bookingEnd = bookingStart.plusHours(2);
 
-        RoomBookingRequest existing = new RoomBookingRequest();
-        existing.setAllocatedRoom(room1);
+        ResourceBookingRequest existing = new ResourceBookingRequest();
+        existing.setAllocatedResource(resource1);
         existing.setMeetingStart(bookingStart);
         existing.setMeetingEnd(bookingEnd);
         existing.setStatus(RoomBookingStatus.APPROVED);
@@ -67,20 +95,23 @@ class RoomAvailabilityServiceTest {
         when(requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED)))
                 .thenReturn(List.of(existing));
 
-        // Query time overlaps with the existing booking
         LocalDateTime queryStart = bookingStart.plusMinutes(30);
         LocalDateTime queryEnd = bookingEnd.plusMinutes(30);
 
-        assertFalse(availabilityService.isRoomAvailable(1L, queryStart, queryEnd));
+        assertFalse(availabilityService.isResourceAvailable(1L, queryStart, queryEnd));
     }
 
     @Test
-    void isRoomAvailable_differentRoom_returnsTrue() {
+    void isResourceAvailable_differentResource_returnsTrue() {
+        when(resourceRepository.findById(2L)).thenReturn(Optional.of(resource2));
+        when(fixedTimetableRepository.existsConflictingClass(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.findOverlappingByResource(eq(2L), any(), any())).thenReturn(List.of());
+
         LocalDateTime bookingStart = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
         LocalDateTime bookingEnd = bookingStart.plusHours(2);
 
-        RoomBookingRequest existing = new RoomBookingRequest();
-        existing.setAllocatedRoom(room1); // Room 1 is booked
+        ResourceBookingRequest existing = new ResourceBookingRequest();
+        existing.setAllocatedResource(resource1);
         existing.setMeetingStart(bookingStart);
         existing.setMeetingEnd(bookingEnd);
         existing.setStatus(RoomBookingStatus.APPROVED);
@@ -88,17 +119,21 @@ class RoomAvailabilityServiceTest {
         when(requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED)))
                 .thenReturn(List.of(existing));
 
-        // Querying Room 2 — should be available
-        assertTrue(availabilityService.isRoomAvailable(2L, bookingStart, bookingEnd));
+        assertTrue(availabilityService.isResourceAvailable(2L, bookingStart, bookingEnd));
     }
 
     @Test
-    void availabilityForRooms_mixedResults() {
+    void availabilityForResources_mixedResults() {
+        when(resourceRepository.findById(1L)).thenReturn(Optional.of(resource1));
+        when(resourceRepository.findById(2L)).thenReturn(Optional.of(resource2));
+        when(fixedTimetableRepository.existsConflictingClass(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.findOverlappingByResource(anyLong(), any(), any())).thenReturn(List.of());
+
         LocalDateTime start = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
         LocalDateTime end = start.plusHours(2);
 
-        RoomBookingRequest existing = new RoomBookingRequest();
-        existing.setAllocatedRoom(room1);
+        ResourceBookingRequest existing = new ResourceBookingRequest();
+        existing.setAllocatedResource(resource1);
         existing.setMeetingStart(start);
         existing.setMeetingEnd(end);
         existing.setStatus(RoomBookingStatus.APPROVED);
@@ -106,20 +141,24 @@ class RoomAvailabilityServiceTest {
         when(requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED)))
                 .thenReturn(List.of(existing));
 
-        Map<Long, Boolean> result = availabilityService.availabilityForRooms(
+        Map<Long, Boolean> result = availabilityService.availabilityForResources(
                 List.of(1L, 2L), start, end);
 
-        assertFalse(result.get(1L)); // Room 1 is booked
-        assertTrue(result.get(2L));  // Room 2 is available
+        assertFalse(result.get(1L));
+        assertTrue(result.get(2L));
     }
 
     @Test
-    void isRoomAvailable_nonOverlappingTime_returnsTrue() {
-        LocalDateTime bookingStart = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
-        LocalDateTime bookingEnd = bookingStart.plusHours(2); // 10:00 - 12:00
+    void isResourceAvailable_nonOverlappingTime_returnsTrue() {
+        when(resourceRepository.findById(1L)).thenReturn(Optional.of(resource1));
+        when(fixedTimetableRepository.existsConflictingClass(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.findOverlappingByResource(eq(1L), any(), any())).thenReturn(List.of());
 
-        RoomBookingRequest existing = new RoomBookingRequest();
-        existing.setAllocatedRoom(room1);
+        LocalDateTime bookingStart = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        LocalDateTime bookingEnd = bookingStart.plusHours(2);
+
+        ResourceBookingRequest existing = new ResourceBookingRequest();
+        existing.setAllocatedResource(resource1);
         existing.setMeetingStart(bookingStart);
         existing.setMeetingEnd(bookingEnd);
         existing.setStatus(RoomBookingStatus.APPROVED);
@@ -127,10 +166,33 @@ class RoomAvailabilityServiceTest {
         when(requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED)))
                 .thenReturn(List.of(existing));
 
-        // Query after the existing booking: 14:00 - 16:00
         LocalDateTime queryStart = bookingStart.plusHours(4);
         LocalDateTime queryEnd = queryStart.plusHours(2);
 
-        assertTrue(availabilityService.isRoomAvailable(1L, queryStart, queryEnd));
+        assertTrue(availabilityService.isResourceAvailable(1L, queryStart, queryEnd));
+    }
+
+    @Test
+    void isResourceAvailable_eventOverlap_returnsFalse() {
+        when(resourceRepository.findById(1L)).thenReturn(Optional.of(resource1));
+        when(fixedTimetableRepository.existsConflictingClass(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.findOverlappingByResource(eq(1L), any(), any())).thenReturn(List.of());
+
+        LocalDateTime start = LocalDateTime.now().plusDays(2).withHour(9);
+        LocalDateTime end = start.plusHours(2);
+
+        Event ev = new Event();
+        ev.setStartTime(start);
+        ev.setEndTime(end);
+
+        ResourceBookingRequest existing = new ResourceBookingRequest();
+        existing.setAllocatedResource(resource1);
+        existing.setEvent(ev);
+        existing.setStatus(RoomBookingStatus.APPROVED);
+
+        when(requestRepo.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED)))
+                .thenReturn(List.of(existing));
+
+        assertFalse(availabilityService.isResourceAvailable(1L, start.plusMinutes(30), end.plusMinutes(30)));
     }
 }

@@ -198,6 +198,14 @@ class EventControllerIntegrationTest {
     }
 
     @Test
+    void getResources_asAdmin_returnsListWithResourceAndRoomAliases() throws Exception {
+        mockMvc.perform(get("/api/resources")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
     void myEvents_returnsOwnEvents() throws Exception {
         // First create an event
         String body = eventJson("My Event", "Testing mine endpoint", "Lab");

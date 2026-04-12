@@ -1,14 +1,14 @@
 package com.campus.event.web;
 
 import com.campus.event.domain.Event;
-import com.campus.event.domain.Room;
-import com.campus.event.domain.RoomBookingRequest;
+import com.campus.event.domain.Resource;
+import com.campus.event.domain.ResourceBookingRequest;
 import com.campus.event.domain.RoomBookingStatus;
 import com.campus.event.repository.BuildingRepository;
 import com.campus.event.repository.EventRepository;
 import com.campus.event.repository.EventRegistrationRepository;
-import com.campus.event.repository.RoomBookingRequestRepository;
-import com.campus.event.repository.RoomRepository;
+import com.campus.event.repository.ResourceBookingRequestRepository;
+import com.campus.event.repository.ResourceRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,18 +27,18 @@ public class PublicController {
 
     private final EventRepository eventRepository;
     private final EventRegistrationRepository eventRegistrationRepository;
-    private final RoomRepository roomRepository;
-    private final RoomBookingRequestRepository bookingRepository;
+    private final ResourceRepository resourceRepository;
+    private final ResourceBookingRequestRepository bookingRepository;
     private final BuildingRepository buildingRepository;
 
     public PublicController(EventRepository eventRepository,
                             EventRegistrationRepository eventRegistrationRepository,
-                            RoomRepository roomRepository,
-                            RoomBookingRequestRepository bookingRepository,
+                            ResourceRepository resourceRepository,
+                            ResourceBookingRequestRepository bookingRepository,
                             BuildingRepository buildingRepository) {
         this.eventRepository = eventRepository;
         this.eventRegistrationRepository = eventRegistrationRepository;
-        this.roomRepository = roomRepository;
+        this.resourceRepository = resourceRepository;
         this.bookingRepository = bookingRepository;
         this.buildingRepository = buildingRepository;
     }
@@ -124,8 +124,8 @@ public class PublicController {
     }
 
     @GetMapping("/rooms")
-    public List<Room> listRooms() {
-        return roomRepository.findAll();
+    public List<Resource> listRooms() {
+        return resourceRepository.findAll();
     }
 
     @GetMapping("/events/debug/list")
@@ -148,7 +148,7 @@ public class PublicController {
     }
 
     @GetMapping("/rooms/available")
-    public List<Room> listAvailableRooms(@RequestParam("start") String startIso,
+    public List<Resource> listAvailableRooms(@RequestParam("start") String startIso,
                                          @RequestParam("end") String endIso) {
         LocalDateTime start = LocalDateTime.parse(startIso);
         LocalDateTime end = LocalDateTime.parse(endIso);
@@ -156,11 +156,11 @@ public class PublicController {
             return List.of();
         }
 
-        List<Room> allRooms = roomRepository.findAll();
-        List<RoomBookingRequest> bookings = bookingRepository.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED));
+        List<Resource> allRooms = resourceRepository.findAll();
+        List<ResourceBookingRequest> bookings = bookingRepository.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED));
 
         Set<Long> occupiedRoomIds = bookings.stream()
-                .filter(b -> b.getAllocatedRoom() != null)
+                .filter(b -> b.getAllocatedResource() != null)
                 .filter(b -> {
                     LocalDateTime bStart;
                     LocalDateTime bEnd;
@@ -175,7 +175,7 @@ public class PublicController {
                     }
                     return start.isBefore(bEnd) && end.isAfter(bStart);
                 })
-                .map(b -> b.getAllocatedRoom().getId())
+                .map(b -> b.getAllocatedResource().getId())
                 .collect(Collectors.toSet());
 
         return allRooms.stream()
@@ -193,9 +193,9 @@ public class PublicController {
             return List.of();
         }
 
-        List<RoomBookingRequest> bookings = bookingRepository.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED));
+        List<ResourceBookingRequest> bookings = bookingRepository.findByStatusIn(Set.of(RoomBookingStatus.APPROVED, RoomBookingStatus.CONFIRMED));
         return bookings.stream()
-                .filter(b -> b.getAllocatedRoom() != null && roomId.equals(b.getAllocatedRoom().getId()))
+                .filter(b -> b.getAllocatedResource() != null && roomId.equals(b.getAllocatedResource().getId()))
                 .filter(b -> {
                     LocalDateTime bStart;
                     LocalDateTime bEnd;

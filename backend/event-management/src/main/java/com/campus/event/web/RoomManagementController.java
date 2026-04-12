@@ -90,21 +90,22 @@ public class RoomManagementController {
     }
     
     // Room endpoints
+    // Room/Resource endpoints
     @GetMapping("/floors/{floorId}/rooms")
     public ResponseEntity<List<Map<String, Object>>> getRoomsByFloor(@PathVariable Long floorId) {
-        List<Room> rooms = roomManagementService.getRoomsByFloor(floorId);
+        List<Resource> rooms = roomManagementService.getRoomsByFloor(floorId);
         return ResponseEntity.ok(rooms.stream().map(this::roomToMap).collect(Collectors.toList()));
     }
     
     @GetMapping("/buildings/{buildingId}/rooms")
     public ResponseEntity<List<Map<String, Object>>> getRoomsByBuilding(@PathVariable Long buildingId) {
-        List<Room> rooms = roomManagementService.getRoomsByBuilding(buildingId);
+        List<Resource> rooms = roomManagementService.getRoomsByBuilding(buildingId);
         return ResponseEntity.ok(rooms.stream().map(this::roomToMap).collect(Collectors.toList()));
     }
     
     @GetMapping("/rooms/{roomId}")
     public ResponseEntity<Map<String, Object>> getRoomDetails(@PathVariable Long roomId) {
-        Room room = roomManagementService.getRoomById(roomId);
+        Resource room = roomManagementService.getRoomById(roomId);
         if (room == null) {
             return ResponseEntity.notFound().build();
         }
@@ -115,11 +116,11 @@ public class RoomManagementController {
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<?> createRoom(@PathVariable Long floorId, @RequestBody Map<String, Object> request) {
         try {
-            Room room = roomManagementService.createRoom(
+            Resource room = roomManagementService.createRoom(
                 floorId,
                 (String) request.get("roomNumber"),
                 (String) request.get("name"),
-                RoomType.valueOf((String) request.get("type")),
+                ResourceType.valueOf((String) request.get("type")),
                 (Integer) request.get("capacity"),
                 (String) request.get("amenities")
             );
@@ -153,12 +154,13 @@ public class RoomManagementController {
         }
     }
     
-    private Map<String, Object> roomToMap(Room room) {
+    private Map<String, Object> roomToMap(Resource room) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", room.getId());
-        map.put("roomNumber", room.getRoomNumber());
+        // Since we mapped roomNumber+name to name, we could pass it all as name
+        map.put("roomNumber", "");
         map.put("name", room.getName());
-        map.put("type", room.getType().name());
+        map.put("type", room.getResourceType().name());
         map.put("capacity", room.getCapacity());
         map.put("amenities", room.getAmenities());
         map.put("isActive", room.isActive());

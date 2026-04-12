@@ -45,6 +45,12 @@ public class TimetableController {
         List<Map<String, Object>> response = schedule.stream().map(this::fixedTimetableToMap).collect(Collectors.toList());
         return ResponseEntity.ok(response);
     }
+
+    /** Same as {@code /room/{id}/week} — resource id is the canonical bookable id (alias for migrated clients). */
+    @GetMapping("/resource/{resourceId}/week")
+    public ResponseEntity<?> getResourceWeeklySchedule(@PathVariable Long resourceId) {
+        return getRoomWeeklySchedule(resourceId);
+    }
     
     @GetMapping("/room/{roomId}/day/{date}")
     public ResponseEntity<?> getRoomDailySchedule(
@@ -67,6 +73,13 @@ public class TimetableController {
             return ResponseEntity.badRequest().body("Error fetching schedule: " + e.getMessage());
         }
     }
+
+    @GetMapping("/resource/{resourceId}/day/{date}")
+    public ResponseEntity<?> getResourceDailySchedule(
+            @PathVariable Long resourceId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return getRoomDailySchedule(resourceId, date);
+    }
     
     // Time slot availability
     @GetMapping("/room/{roomId}/available-slots")
@@ -81,12 +94,26 @@ public class TimetableController {
             return ResponseEntity.badRequest().body("Error checking availability: " + e.getMessage());
         }
     }
+
+    @GetMapping("/resource/{resourceId}/available-slots")
+    public ResponseEntity<?> getResourceAvailableSlots(
+            @PathVariable Long resourceId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return getAvailableSlots(resourceId, date);
+    }
     
     // Collision check
     @PostMapping("/check-conflict")
     public ResponseEntity<?> checkTimeSlotConflict(@RequestBody Map<String, Object> request) {
         try {
-            Long roomId = Long.valueOf(request.get("roomId").toString());
+            Long roomId;
+            if (request.get("resourceId") != null) {
+                roomId = Long.valueOf(request.get("resourceId").toString());
+            } else if (request.get("roomId") != null) {
+                roomId = Long.valueOf(request.get("roomId").toString());
+            } else {
+                return ResponseEntity.badRequest().body("resourceId or roomId is required");
+            }
             String dateStr = (String) request.get("date");
             LocalDate date = LocalDate.parse(dateStr);
             
@@ -128,10 +155,12 @@ public class TimetableController {
         map.put("academicYear", ft.getAcademicYear());
         map.put("isActive", ft.isActive());
         
-        if (ft.getRoom() != null) {
-            map.put("roomId", ft.getRoom().getId());
-            map.put("roomNumber", ft.getRoom().getRoomNumber());
-            map.put("roomName", ft.getRoom().getName());
+        if (ft.getResource() != null) {
+            var res = ft.getResource();
+            map.put("resourceId", res.getId());
+            map.put("roomId", res.getRoomRefId() != null ? res.getRoomRefId() : res.getId());
+            map.put("roomNumber", "");
+            map.put("roomName", res.getName());
         }
         
         if (ft.getFaculty() != null) {

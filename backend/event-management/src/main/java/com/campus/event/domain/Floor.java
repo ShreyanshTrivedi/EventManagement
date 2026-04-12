@@ -28,7 +28,7 @@ public class Floor {
 
     @OneToMany(mappedBy = "floor", cascade = CascadeType.ALL, orphanRemoval = true)
     @OnDelete(action = OnDeleteAction.CASCADE)
-    private List<Room> rooms = new ArrayList<>();
+    private List<Resource> rooms = new ArrayList<>();
 
     // Explicit default constructor for Hibernate
     public Floor() {
@@ -40,12 +40,12 @@ public class Floor {
         this.building = building;
     }
 
-    public void addRoom(Room room) {
+    public void addRoom(Resource room) {
         rooms.add(room);
         room.setFloor(this);
     }
 
-    public void removeRoom(Room room) {
+    public void removeRoom(Resource room) {
         rooms.remove(room);
         room.setFloor(null);
     }
@@ -58,6 +58,6 @@ public class Floor {
     public void setName(String name) { this.name = name; }
     public Building getBuilding() { return building; }
     public void setBuilding(Building building) { this.building = building; }
-    public List<Room> getRooms() { return rooms; }
-    public void setRooms(List<Room> rooms) { this.rooms = rooms; }
+    public List<Resource> getRooms() { return rooms; }
+    public void setRooms(List<Resource> rooms) { this.rooms = rooms; }
 }

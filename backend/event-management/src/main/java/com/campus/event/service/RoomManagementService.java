@@ -16,14 +16,14 @@ public class RoomManagementService {
     
     private final BuildingRepository buildingRepository;
     private final FloorRepository floorRepository;
-    private final RoomRepository roomRepository;
+    private final ResourceRepository resourceRepository;
     
     public RoomManagementService(BuildingRepository buildingRepository, 
                                 FloorRepository floorRepository,
-                                RoomRepository roomRepository) {
+                                ResourceRepository resourceRepository) {
         this.buildingRepository = buildingRepository;
         this.floorRepository = floorRepository;
-        this.roomRepository = roomRepository;
+        this.resourceRepository = resourceRepository;
     }
     
     // Building operations
@@ -57,29 +57,35 @@ public class RoomManagementService {
     }
     
     // Room operations
-    public List<Room> getRoomsByFloor(Long floorId) {
-        return roomRepository.findByFloorIdAndIsActiveTrueOrderByRoomNumberAsc(floorId);
+    // Resource operations
+    public List<Resource> getRoomsByFloor(Long floorId) {
+        return resourceRepository.findByFloor_IdAndIsActiveTrueOrderByNameAsc(floorId);
     }
     
-    public List<Room> getRoomsByBuilding(Long buildingId) {
-        return roomRepository.findByBuildingIdAndIsActiveTrue(buildingId);
+    public List<Resource> getRoomsByBuilding(Long buildingId) {
+        return resourceRepository.findByBuilding_IdAndIsActiveTrueOrderByNameAsc(buildingId);
     }
     
-    public Room getRoomById(Long roomId) {
-        return roomRepository.findById(roomId).orElse(null);
+    public Resource getRoomById(Long roomId) {
+        return resourceRepository.findById(roomId).orElse(null);
     }
     
-    public Room createRoom(Long floorId, String roomNumber, String name, RoomType type, Integer capacity, String amenities) {
+    public Resource createRoom(Long floorId, String roomNumber, String name, ResourceType type, Integer capacity, String amenities) {
         Floor floor = floorRepository.findById(floorId)
             .orElseThrow(() -> new IllegalArgumentException("Floor not found"));
             
-        if (roomRepository.existsByFloorIdAndRoomNumber(floorId, roomNumber)) {
-            throw new IllegalArgumentException("Room " + roomNumber + " already exists on this floor");
-        }
-        
-        Room room = new Room(roomNumber, name, type, capacity, floor);
-        room.setAmenities(amenities);
-        return roomRepository.save(room);
+        // We will just use 'name' instead of combining since Resource does not have roomNumber.
+        // Or if you want to prepend roomNumber: String resourceName = roomNumber + " - " + name;
+        String resourceName = roomNumber + " - " + name;
+
+        Resource resource = new Resource();
+        resource.setName(resourceName);
+        resource.setResourceType(type);
+        resource.setCapacity(capacity);
+        resource.setFloor(floor);
+        resource.setBuilding(floor.getBuilding());
+        resource.setAmenities(amenities);
+        return resourceRepository.save(resource);
     }
     
     // Initialize building structures (operates on EXISTING buildings only — never creates new ones)
@@ -103,39 +109,49 @@ public class RoomManagementService {
         }
 
         for (Floor floor : existingFloors) {
-            if (roomRepository.findByFloorIdOrderByRoomNumberAsc(floor.getId()).isEmpty()) {
+            if (resourceRepository.findByFloor_IdAndIsActiveTrueOrderByNameAsc(floor.getId()).isEmpty()) {
                 createSampleRooms(floor, prefix, hasAuditorium);
             }
         }
     }
     
     private void createSampleRooms(Floor floor, String prefix, boolean hasAuditorium) {
-        List<Room> sampleRooms = new ArrayList<>();
+        List<Resource> sampleRooms = new ArrayList<>();
         
         if (floor.getFloorNumber() == 0) { // Ground Floor
-            sampleRooms.add(new Room(prefix + "0101", "Lecture Hall 1", RoomType.LECTURE_HALL, 120, floor));
-            sampleRooms.add(new Room(prefix + "0102", "Lecture Hall 2", RoomType.LECTURE_HALL, 120, floor));
-            sampleRooms.add(new Room(prefix + "0103", "Computer Lab 1", RoomType.LAB, 60, floor));
-            sampleRooms.add(new Room(prefix + "0104", "Computer Lab 2", RoomType.LAB, 60, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0101", "Lecture Hall 1", ResourceType.ROOM, 120, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0102", "Lecture Hall 2", ResourceType.ROOM, 120, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0103", "Computer Lab 1", ResourceType.LAB, 60, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0104", "Computer Lab 2", ResourceType.LAB, 60, floor));
             if (hasAuditorium) {
-                sampleRooms.add(new Room(prefix + "0105", "Main Auditorium", RoomType.AUDITORIUM, 300, floor));
+                sampleRooms.add(createSampleRoom(prefix + "0105", "Main Auditorium", ResourceType.AUDITORIUM, 300, floor));
             }
         } else if (floor.getFloorNumber() == 1) { // First Floor
-            sampleRooms.add(new Room(prefix + "0201", "Classroom 1", RoomType.CLASSROOM, 40, floor));
-            sampleRooms.add(new Room(prefix + "0202", "Classroom 2", RoomType.CLASSROOM, 40, floor));
-            sampleRooms.add(new Room(prefix + "0203", "Seminar Hall", RoomType.SEMINAR_HALL, 80, floor));
-            sampleRooms.add(new Room(prefix + "0204", "Meeting Room 1", RoomType.MEETING_ROOM, 20, floor));
-            sampleRooms.add(new Room(prefix + "0205", "Meeting Room 2", RoomType.MEETING_ROOM, 20, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0201", "Classroom 1", ResourceType.ROOM, 40, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0202", "Classroom 2", ResourceType.ROOM, 40, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0203", "Seminar Hall", ResourceType.ROOM, 80, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0204", "Meeting Room 1", ResourceType.ROOM, 20, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0205", "Meeting Room 2", ResourceType.ROOM, 20, floor));
         } else { // Second Floor
-            sampleRooms.add(new Room(prefix + "0301", "Classroom 3", RoomType.CLASSROOM, 40, floor));
-            sampleRooms.add(new Room(prefix + "0302", "Classroom 4", RoomType.CLASSROOM, 40, floor));
-            sampleRooms.add(new Room(prefix + "0303", "Physics Lab", RoomType.LAB, 30, floor));
-            sampleRooms.add(new Room(prefix + "0304", "Chemistry Lab", RoomType.LAB, 30, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0301", "Classroom 3", ResourceType.ROOM, 40, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0302", "Classroom 4", ResourceType.ROOM, 40, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0303", "Physics Lab", ResourceType.LAB, 30, floor));
+            sampleRooms.add(createSampleRoom(prefix + "0304", "Chemistry Lab", ResourceType.LAB, 30, floor));
         }
         
-        for (Room room : sampleRooms) {
+        for (Resource room : sampleRooms) {
             room.setAmenities("Projector, Whiteboard, WiFi");
-            roomRepository.save(room);
+            resourceRepository.save(room);
         }
+    }
+
+    private Resource createSampleRoom(String num, String name, ResourceType type, int cap, Floor floor) {
+        Resource r = new Resource();
+        r.setName(num + " - " + name);
+        r.setResourceType(type);
+        r.setCapacity(cap);
+        r.setFloor(floor);
+        r.setBuilding(floor.getBuilding());
+        return r;
     }
 }

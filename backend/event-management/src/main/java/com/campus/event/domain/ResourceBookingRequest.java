@@ -7,8 +7,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "room_booking_requests")
-public class RoomBookingRequest {
+@Table(name = "resource_booking_requests")
+public class ResourceBookingRequest {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -18,20 +18,20 @@ public class RoomBookingRequest {
     private Event event;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pref1_room_id")
-    private Room pref1;
+    @JoinColumn(name = "pref1_resource_id")
+    private Resource pref1;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pref2_room_id")
-    private Room pref2;
+    @JoinColumn(name = "pref2_resource_id")
+    private Resource pref2;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pref3_room_id")
-    private Room pref3;
+    @JoinColumn(name = "pref3_resource_id")
+    private Resource pref3;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "allocated_room_id")
-    private Room allocatedRoom;
+    @JoinColumn(name = "allocated_resource_id")
+    private Resource allocatedResource;
 
     @Enumerated(EnumType.STRING)
     private RoomBookingStatus status = RoomBookingStatus.PENDING;
@@ -44,6 +44,13 @@ public class RoomBookingRequest {
 
     private String requestedByUsername;
     private String approvedByUsername;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "claimed_by_id")
+    private User claimedBy;
+
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
 
     // For standalone meeting bookings (no associated event)
     private LocalDateTime meetingStart;
@@ -91,14 +98,14 @@ public class RoomBookingRequest {
     public Long getId() { return id; }
     public Event getEvent() { return event; }
     public void setEvent(Event event) { this.event = event; }
-    public Room getPref1() { return pref1; }
-    public void setPref1(Room pref1) { this.pref1 = pref1; }
-    public Room getPref2() { return pref2; }
-    public void setPref2(Room pref2) { this.pref2 = pref2; }
-    public Room getPref3() { return pref3; }
-    public void setPref3(Room pref3) { this.pref3 = pref3; }
-    public Room getAllocatedRoom() { return allocatedRoom; }
-    public void setAllocatedRoom(Room allocatedRoom) { this.allocatedRoom = allocatedRoom; }
+    public Resource getPref1() { return pref1; }
+    public void setPref1(Resource pref1) { this.pref1 = pref1; }
+    public Resource getPref2() { return pref2; }
+    public void setPref2(Resource pref2) { this.pref2 = pref2; }
+    public Resource getPref3() { return pref3; }
+    public void setPref3(Resource pref3) { this.pref3 = pref3; }
+    public Resource getAllocatedResource() { return allocatedResource; }
+    public void setAllocatedResource(Resource allocatedResource) { this.allocatedResource = allocatedResource; }
     public RoomBookingStatus getStatus() { return status; }
     public void setStatus(RoomBookingStatus status) { this.status = status; }
     public LocalDateTime getRequestedAt() { return requestedAt; }
@@ -111,6 +118,10 @@ public class RoomBookingRequest {
     public void setRequestedByUsername(String requestedByUsername) { this.requestedByUsername = requestedByUsername; }
     public String getApprovedByUsername() { return approvedByUsername; }
     public void setApprovedByUsername(String approvedByUsername) { this.approvedByUsername = approvedByUsername; }
+    public User getClaimedBy() { return claimedBy; }
+    public void setClaimedBy(User claimedBy) { this.claimedBy = claimedBy; }
+    public LocalDateTime getClaimedAt() { return claimedAt; }
+    public void setClaimedAt(LocalDateTime claimedAt) { this.claimedAt = claimedAt; }
     public LocalDateTime getMeetingStart() { return meetingStart; }
     public void setMeetingStart(LocalDateTime meetingStart) { this.meetingStart = meetingStart; }
     public LocalDateTime getMeetingEnd() { return meetingEnd; }

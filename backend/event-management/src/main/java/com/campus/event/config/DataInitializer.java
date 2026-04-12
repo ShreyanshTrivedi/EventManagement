@@ -7,15 +7,15 @@ import com.campus.event.domain.Event;
 import com.campus.event.domain.FixedTimetable;
 import com.campus.event.domain.Floor;
 import com.campus.event.domain.Role;
-import com.campus.event.domain.Room;
-import com.campus.event.domain.RoomType;
+import com.campus.event.domain.Resource;
+import com.campus.event.domain.ResourceType;
 import com.campus.event.domain.User;
 import com.campus.event.repository.BuildingRepository;
 import com.campus.event.repository.BuildingTimetableRepository;
 import com.campus.event.repository.EventRepository;
 import com.campus.event.repository.FixedTimetableRepository;
 import com.campus.event.repository.FloorRepository;
-import com.campus.event.repository.RoomRepository;
+import com.campus.event.repository.ResourceRepository;
 import com.campus.event.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +41,7 @@ public class DataInitializer {
     CommandLineRunner seedData(UserRepository users, EventRepository events,
                                BuildingRepository buildings, BuildingTimetableRepository timetables,
                                FixedTimetableRepository fixedTimetables,
-                               FloorRepository floors, RoomRepository rooms,
+                               FloorRepository floors, ResourceRepository rooms,
                                PasswordEncoder encoder,
                                TransactionTemplate transactionTemplate,
                                Environment environment) {
@@ -201,36 +201,36 @@ public class DataInitializer {
     // ── Floors + Rooms (NEW — idempotent) ──
 
     private static void ensureFloorsAndRoomsExist(Building building, FloorRepository floors,
-                                                   RoomRepository rooms, boolean hasAuditorium) {
+                                                   ResourceRepository rooms, boolean hasAuditorium) {
         String code = building.getCode();
         String prefix = "BLD_A".equals(code) ? "A" : "B";
 
         // Floor 0 — Ground Floor
         Floor ground = ensureFloorExists(building, floors, 0, "Ground Floor");
-        ensureRoomExists(rooms, ground, prefix + "-G01", "Lecture Hall 1", RoomType.LECTURE_HALL, 120);
-        ensureRoomExists(rooms, ground, prefix + "-G02", "Lecture Hall 2", RoomType.LECTURE_HALL, 120);
-        ensureRoomExists(rooms, ground, prefix + "-G03", "Computer Lab", RoomType.LAB, 60);
+        ensureRoomExists(rooms, ground, prefix + "-G01", "Lecture Hall 1", ResourceType.ROOM, 120);
+        ensureRoomExists(rooms, ground, prefix + "-G02", "Lecture Hall 2", ResourceType.ROOM, 120);
+        ensureRoomExists(rooms, ground, prefix + "-G03", "Computer Lab", ResourceType.LAB, 60);
         if (hasAuditorium) {
-            ensureRoomExists(rooms, ground, prefix + "-G04", "Main Auditorium", RoomType.AUDITORIUM, 300);
+            ensureRoomExists(rooms, ground, prefix + "-G04", "Main Auditorium", ResourceType.AUDITORIUM, 300);
         }
 
         // Floor 1 — First Floor
         Floor first = ensureFloorExists(building, floors, 1, "First Floor");
-        ensureRoomExists(rooms, first, prefix + "-101", "Classroom 1", RoomType.CLASSROOM, 40);
-        ensureRoomExists(rooms, first, prefix + "-102", "Classroom 2", RoomType.CLASSROOM, 40);
-        ensureRoomExists(rooms, first, prefix + "-103", "Seminar Hall", RoomType.SEMINAR_HALL, 80);
-        ensureRoomExists(rooms, first, prefix + "-104", "Meeting Room 1", RoomType.MEETING_ROOM, 20);
+        ensureRoomExists(rooms, first, prefix + "-101", "Classroom 1", ResourceType.ROOM, 40);
+        ensureRoomExists(rooms, first, prefix + "-102", "Classroom 2", ResourceType.ROOM, 40);
+        ensureRoomExists(rooms, first, prefix + "-103", "Seminar Hall", ResourceType.ROOM, 80);
+        ensureRoomExists(rooms, first, prefix + "-104", "Meeting Room 1", ResourceType.ROOM, 20);
 
         // Floor 2 — Second Floor
         Floor second = ensureFloorExists(building, floors, 2, "Second Floor");
-        ensureRoomExists(rooms, second, prefix + "-201", "Classroom 3", RoomType.CLASSROOM, 40);
-        ensureRoomExists(rooms, second, prefix + "-202", "Classroom 4", RoomType.CLASSROOM, 40);
+        ensureRoomExists(rooms, second, prefix + "-201", "Classroom 3", ResourceType.ROOM, 40);
+        ensureRoomExists(rooms, second, prefix + "-202", "Classroom 4", ResourceType.ROOM, 40);
         if (hasAuditorium) {
-            ensureRoomExists(rooms, second, prefix + "-203", "Physics Lab", RoomType.LAB, 30);
-            ensureRoomExists(rooms, second, prefix + "-204", "Chemistry Lab", RoomType.LAB, 30);
+            ensureRoomExists(rooms, second, prefix + "-203", "Physics Lab", ResourceType.LAB, 30);
+            ensureRoomExists(rooms, second, prefix + "-204", "Chemistry Lab", ResourceType.LAB, 30);
         } else {
-            ensureRoomExists(rooms, second, prefix + "-203", "Electronics Lab", RoomType.LAB, 30);
-            ensureRoomExists(rooms, second, prefix + "-204", "Workshop", RoomType.LAB, 30);
+            ensureRoomExists(rooms, second, prefix + "-203", "Electronics Lab", ResourceType.LAB, 30);
+            ensureRoomExists(rooms, second, prefix + "-204", "Workshop", ResourceType.LAB, 30);
         }
 
         log.info("Ensured floors and rooms exist for building: {} ({})", building.getName(), code);
@@ -254,15 +254,21 @@ public class DataInitializer {
 
     /**
      * Finds or creates a room on the given floor by name.
-     * Idempotent: uses findByNameAndFloorId before inserting.
+     * Idempotent: uses findByNameAndFloor_Id before inserting.
      */
-    private static void ensureRoomExists(RoomRepository rooms, Floor floor,
+    private static void ensureRoomExists(ResourceRepository rooms, Floor floor,
                                           String roomNumber, String name,
-                                          RoomType type, int capacity) {
-        if (rooms.findByNameAndFloorId(name, floor.getId()).isPresent()) {
+                                          ResourceType type, int capacity) {
+        String fullName = roomNumber + " - " + name;
+        if (rooms.findByNameAndFloor_Id(fullName, floor.getId()).isPresent()) {
             return; // already seeded
         }
-        Room room = new Room(roomNumber, name, type, capacity, floor);
+        Resource room = new Resource();
+        room.setName(fullName);
+        room.setResourceType(type);
+        room.setCapacity(capacity);
+        room.setFloor(floor);
+        room.setBuilding(floor.getBuilding());
         room.setAmenities("Projector, Whiteboard, WiFi");
         rooms.save(room);
         log.info("    Created room: {} ({}) — {} seats, type={}", name, roomNumber, capacity, type);
@@ -313,7 +319,7 @@ public class DataInitializer {
     }
 
     private static void seedBuildingAFixedTimetableIfMissing(Building building,
-                                                             RoomRepository rooms,
+                                                             ResourceRepository rooms,
                                                              FixedTimetableRepository fixedTimetables) {
         final Random random = new Random(42L);
         final String academicYear = String.valueOf(LocalDateTime.now().getYear());
@@ -323,17 +329,17 @@ public class DataInitializer {
                 {LocalTime.of(14, 0), LocalTime.of(16, 0)}
         };
 
-        for (Room room : rooms.findByBuildingIdAndIsActiveTrue(building.getId())) {
+        for (Resource room : rooms.findByBuilding_IdAndIsActiveTrueOrderByNameAsc(building.getId())) {
 
             for (DayOfWeek day : DayOfWeek.values()) {
                 if (day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY) continue;
-                if (!fixedTimetables.findByRoomIdAndDayOfWeekOrderByStartTimeAsc(room.getId(), day).isEmpty()) {
+                if (!fixedTimetables.findByResourceIdAndDayOfWeekOrderByStartTimeAsc(room.getId(), day).isEmpty()) {
                     continue;
                 }
                 for (int i = 0; i < windows.length; i++) {
                     if (!random.nextBoolean()) continue;
                     FixedTimetable ft = new FixedTimetable();
-                    ft.setRoom(room);
+                    ft.setResource(room);
                     ft.setCourseName("BLOCKED_SLOT");
                     ft.setCourseCode("BLD-A-FIXED-" + (i + 1));
                     ft.setSection("AUTO");

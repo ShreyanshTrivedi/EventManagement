@@ -4,10 +4,14 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import java.util.Map;
@@ -15,12 +19,34 @@ import java.util.function.Function;
 
 @Service
 public class JwtTokenService {
+    private static final Logger log = LoggerFactory.getLogger(JwtTokenService.class);
+    /** HS256 requires at least 256 bits = 32 bytes */
+    private static final int MIN_SECRET_BYTES = 32;
 
     @Value("${app.security.jwtSecret}")
     private String secret;
 
     @Value("${app.security.jwtExpirationMs}")
     private long jwtExpirationMs;
+
+    /**
+     * Validates JWT secret strength on startup.
+     * Fails fast if the secret is shorter than 256 bits so misconfigured
+     * deployments are caught immediately rather than signing weak tokens silently.
+     *
+     * Generate a compliant secret with: {@code openssl rand -base64 32}
+     */
+    @PostConstruct
+    public void validateSecret() {
+        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "app.security.jwtSecret is only " + bytes.length + " bytes — " +
+                    "minimum required is " + MIN_SECRET_BYTES + " bytes (256 bits) for HS256. " +
+                    "Generate a strong secret: openssl rand -base64 32");
+        }
+        log.info("JWT secret validated: {} bytes (OK)", bytes.length);
+    }
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -67,9 +93,6 @@ public class JwtTokenService {
     }
 
     private Key getSignInKey() {
-        // Use raw secret bytes to allow plain-text secrets in application.yml
-        return Keys.hmacShaKeyFor(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 }
-
-

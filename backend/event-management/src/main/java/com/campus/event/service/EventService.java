@@ -3,6 +3,7 @@ package com.campus.event.service;
 import com.campus.event.domain.Building;
 import com.campus.event.domain.Event;
 import com.campus.event.domain.EventRegistration;
+import com.campus.event.domain.EventStatus;
 import com.campus.event.domain.EventTimeSlot;
 import com.campus.event.domain.EventTimingModel;
 import com.campus.event.domain.User;
@@ -13,9 +14,12 @@ import com.campus.event.repository.NotificationDeliveryRepository;
 import com.campus.event.repository.NotificationMessageRepository;
 import com.campus.event.repository.NotificationThreadRepository;
 import com.campus.event.repository.RegistrationRepository;
-import com.campus.event.repository.RoomBookingRequestRepository;
+import com.campus.event.repository.ResourceBookingRequestRepository;
 import com.campus.event.repository.ThreadMessageRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +32,14 @@ import java.util.Set;
 
 @Service
 public class EventService {
+    private static final Logger log = LoggerFactory.getLogger(EventService.class);
 
     private final EventRepository eventRepository;
     private final EventRegistrationRepository eventRegistrationRepository;
     private final RegistrationRepository registrationRepository;
     private final EventTimeSlotRepository eventTimeSlotRepository;
     private final NotificationService notificationService;
-    private final RoomBookingRequestRepository roomBookingRequestRepository;
+    private final ResourceBookingRequestRepository resourceBookingRequestRepository;
     private final ThreadMessageRepository threadMessageRepository;
     private final NotificationThreadRepository notificationThreadRepository;
     private final NotificationDeliveryRepository notificationDeliveryRepository;
@@ -46,7 +51,7 @@ public class EventService {
                         RegistrationRepository registrationRepository,
                         EventTimeSlotRepository eventTimeSlotRepository,
                         NotificationService notificationService,
-                        RoomBookingRequestRepository roomBookingRequestRepository,
+                        ResourceBookingRequestRepository resourceBookingRequestRepository,
                         ThreadMessageRepository threadMessageRepository,
                         NotificationThreadRepository notificationThreadRepository,
                         NotificationDeliveryRepository notificationDeliveryRepository,
@@ -56,7 +61,7 @@ public class EventService {
         this.registrationRepository = registrationRepository;
         this.eventTimeSlotRepository = eventTimeSlotRepository;
         this.notificationService = notificationService;
-        this.roomBookingRequestRepository = roomBookingRequestRepository;
+        this.resourceBookingRequestRepository = resourceBookingRequestRepository;
         this.threadMessageRepository = threadMessageRepository;
         this.notificationThreadRepository = notificationThreadRepository;
         this.notificationDeliveryRepository = notificationDeliveryRepository;
@@ -206,7 +211,7 @@ public class EventService {
             throw new SecurityException("Only the event creator can cancel this event");
         }
 
-        boolean hasAllocatedRoom = roomBookingRequestRepository != null && roomBookingRequestRepository.existsByEvent_IdAndStatusIn(
+        boolean hasAllocatedRoom = resourceBookingRequestRepository != null && resourceBookingRequestRepository.existsByEvent_IdAndStatusIn(
                 eventId, Set.of(com.campus.event.domain.RoomBookingStatus.APPROVED, com.campus.event.domain.RoomBookingStatus.CONFIRMED));
         if (hasAllocatedRoom) {
             throw new IllegalStateException("Cannot cancel event: Room already allocated.");
@@ -230,7 +235,7 @@ public class EventService {
         }
 
         // Delete related records
-        if (roomBookingRequestRepository != null) roomBookingRequestRepository.deleteByEvent_Id(eventId);
+        if (resourceBookingRequestRepository != null) resourceBookingRequestRepository.deleteByEvent_Id(eventId);
         if (eventTimeSlotRepository != null) eventTimeSlotRepository.deleteByEvent_Id(eventId);
         eventRegistrationRepository.deleteByEvent_Id(eventId);
         registrationRepository.deleteByEvent_Id(eventId);
@@ -247,6 +252,20 @@ public class EventService {
 
         // Delete the event
         eventRepository.delete(event);
+    }
+
+    /**
+     * Runs every 15 minutes. Marks APPROVED events as COMPLETED once their
+     * end_time has passed. This keeps the status field current without requiring
+     * a web request to trigger it.
+     */
+    @Scheduled(fixedDelay = 900_000) // 15 minutes
+    @Transactional
+    public void autoCompleteExpiredEvents() {
+        int updated = eventRepository.markCompletedIfPast(LocalDateTime.now());
+        if (updated > 0) {
+            log.info("autoCompleteExpiredEvents: marked {} event(s) as COMPLETED.", updated);
+        }
     }
 }
 
