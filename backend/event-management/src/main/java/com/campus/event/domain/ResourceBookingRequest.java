@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -63,6 +65,15 @@ public class ResourceBookingRequest {
      */
     @Column(name = "split_group_id")
     private UUID splitGroupId;
+
+    /**
+     * Per-day booking slots. Each slot represents one day of the booking
+     * and can have its own room allocation. This is the core of the
+     * slot-based booking model for multi-day events.
+     */
+    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("slotDate ASC")
+    private List<RoomBookingSlot> slots = new ArrayList<>();
 
     // Helper methods for schedule management
     public java.time.LocalDate getDate() {
@@ -130,4 +141,6 @@ public class ResourceBookingRequest {
     public void setMeetingPurpose(String meetingPurpose) { this.meetingPurpose = meetingPurpose; }
     public UUID getSplitGroupId() { return splitGroupId; }
     public void setSplitGroupId(UUID splitGroupId) { this.splitGroupId = splitGroupId; }
+    public List<RoomBookingSlot> getSlots() { return slots; }
+    public void setSlots(List<RoomBookingSlot> slots) { this.slots = slots; }
 }

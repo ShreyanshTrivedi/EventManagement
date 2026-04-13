@@ -179,6 +179,44 @@ public class ScheduleService {
 
         return messages;
     }
+
+    /**
+     * Single-day/slot conflict check: validates a room for one specific date and time range.
+     * Returns timetable conflicts and building-hours violations for that day only.
+     * Used by BookingSlotService for per-day conflict enrichment.
+     */
+    public List<String> getRoomConflictsForSlot(Long roomId, LocalDate date,
+                                                 LocalTime startTime, LocalTime endTime) {
+        List<String> messages = new ArrayList<>();
+        Room room = roomRepository.findById(roomId).orElse(null);
+        if (room == null) return messages;
+
+        // Building hours check for this specific day segment
+        Long buildingId = room.getFloor() != null && room.getFloor().getBuilding() != null
+                ? room.getFloor().getBuilding().getId() : null;
+        if (buildingId != null) {
+            LocalDateTime segStart = LocalDateTime.of(date, startTime);
+            LocalDateTime segEnd = LocalDateTime.of(date, endTime);
+            if (!buildingTimetableService.isBookingWithinBuildingHours(buildingId, segStart, segEnd)) {
+                messages.add("Outside building operating hours");
+            }
+        }
+
+        // Fixed timetable conflicts for this day
+        DayOfWeek dow = date.getDayOfWeek();
+        List<FixedTimetable> timetableConflicts = fixedTimetableRepository
+                .findByRoomIdOrderByDayOfWeekAscStartTimeAsc(roomId).stream()
+                .filter(ft -> ft.isActive() && ft.getDayOfWeek() == dow
+                        && ft.getStartTime().isBefore(endTime) && ft.getEndTime().isAfter(startTime))
+                .collect(Collectors.toList());
+
+        for (FixedTimetable ft : timetableConflicts) {
+            messages.add("Timetable conflict: " + ft.getCourseCode() + " " +
+                         ft.getStartTime() + "–" + ft.getEndTime());
+        }
+
+        return messages;
+    }
     
     public List<String> getAvailableSlots(Long resourceId, LocalDate date) {
         List<String> availableSlots = new ArrayList<>();

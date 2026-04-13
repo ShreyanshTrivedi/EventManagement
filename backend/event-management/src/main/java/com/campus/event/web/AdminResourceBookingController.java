@@ -5,9 +5,9 @@ import com.campus.event.domain.Event;
 import com.campus.event.domain.EventStatus;
 import com.campus.event.domain.EventTimeSlot;
 import com.campus.event.domain.Role;
-import com.campus.event.domain.Resource;
-import com.campus.event.domain.ResourceBookingRequest;
-import com.campus.event.domain.ResourceType;
+import com.campus.event.domain.Room;
+import com.campus.event.domain.RoomBookingRequest;
+import com.campus.event.domain.RoomBookingSlot;
 import com.campus.event.domain.RoomBookingStatus;
 import com.campus.event.domain.User;
 import com.campus.event.repository.EventRegistrationRepository;
@@ -16,6 +16,7 @@ import com.campus.event.repository.EventTimeSlotRepository;
 import com.campus.event.repository.ResourceBookingRequestRepository;
 import com.campus.event.repository.ResourceRepository;
 import com.campus.event.repository.UserRepository;
+import com.campus.event.service.BookingSlotService;
 import com.campus.event.service.NotificationService;
 import com.campus.event.service.RoomApprovalRules;
 import com.campus.event.service.ScheduleService;
@@ -29,7 +30,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,14 +58,14 @@ public class AdminResourceBookingController {
     private final EventRegistrationRepository registrationRepo;
     private final ScheduleService scheduleService;
     private final EventTimeSlotRepository eventTimeSlotRepository;
-    private final EventRepository eventRepository;
+    private final BookingSlotService bookingSlotService;
 
     public AdminResourceBookingController(ResourceBookingRequestRepository requestRepo, ResourceRepository resourceRepo,
                                       UserRepository userRepository, NotificationService notificationService,
                                       ScheduleService scheduleService,
                                       EventRegistrationRepository registrationRepo,
                                       EventTimeSlotRepository eventTimeSlotRepository,
-                                      EventRepository eventRepository) {
+                                      BookingSlotService bookingSlotService) {
         this.requestRepo = requestRepo;
         this.resourceRepo = resourceRepo;
         this.userRepository = userRepository;
@@ -70,7 +73,7 @@ public class AdminResourceBookingController {
         this.scheduleService = scheduleService;
         this.registrationRepo = registrationRepo;
         this.eventTimeSlotRepository = eventTimeSlotRepository;
-        this.eventRepository = eventRepository;
+        this.bookingSlotService = bookingSlotService;
     }
 
     @GetMapping
@@ -162,20 +165,8 @@ public class AdminResourceBookingController {
             m.put("start", ev.getStartTime());
             m.put("end", ev.getEndTime());
             m.put("registrationCount", registrationRepo.countByEvent_Id(ev.getId()));
-            // Multi-day event metadata
             if (ev.getTimingModel() != null) {
                 m.put("timingModel", ev.getTimingModel().name());
-                List<EventTimeSlot> slots = eventTimeSlotRepository.findByEvent_IdOrderBySlotStartAsc(ev.getId());
-                m.put("slotCount", slots.size());
-                if (slots.size() > 1) {
-                    m.put("slots", slots.stream().map(s -> {
-                        Map<String, Object> sm = new HashMap<>();
-                        sm.put("day", s.getDayIndex() != null ? s.getDayIndex() + 1 : null);
-                        sm.put("slotStart", s.getSlotStart());
-                        sm.put("slotEnd", s.getSlotEnd());
-                        return sm;
-                    }).collect(Collectors.toList()));
-                }
             }
             if (ev.getBuilding() != null) {
                 m.put("buildingId", ev.getBuilding().getId());
@@ -187,8 +178,7 @@ public class AdminResourceBookingController {
             m.put("start", r.getMeetingStart());
             m.put("end", r.getMeetingEnd());
             m.put("timingModel", "SINGLE_DAY");
-            m.put("slotCount", 1);
-            Resource ref = r.getPref1();
+            Room ref = r.getPref1();
             if (ref != null && ref.getFloor() != null && ref.getFloor().getBuilding() != null) {
                 m.put("buildingId", ref.getFloor().getBuilding().getId());
                 m.put("buildingName", ref.getFloor().getBuilding().getName());
@@ -231,67 +221,42 @@ public class AdminResourceBookingController {
         } else {
             m.put("splitPart", Boolean.FALSE);
         }
+
+        // Booking slots — per-day breakdown with room allocation status
+        List<RoomBookingSlot> bookingSlots = bookingSlotService.getSlotsForRequest(r.getId());
+        m.put("slotCount", bookingSlots.size());
+        m.put("bookingSlots", bookingSlots.stream().map(s -> {
+            Map<String, Object> sm = new LinkedHashMap<>();
+            sm.put("id", s.getId());
+            sm.put("date", s.getSlotDate().toString());
+            sm.put("startTime", s.getStartTime().toString());
+            sm.put("endTime", s.getEndTime().toString());
+            sm.put("roomId", s.getRoom() != null ? s.getRoom().getId() : null);
+            sm.put("roomName", s.getRoom() != null ? s.getRoom().getName() : null);
+            sm.put("status", s.getStatus());
+            return sm;
+        }).collect(Collectors.toList()));
+
         return m;
     }
 
+    /**
+     * Approval request body. Supports two modes:
+     * <ul>
+     *   <li><b>Bulk</b>: set {@code allocatedRoomId} — allocates same room to ALL slots
+     *       (only if available for every slot)</li>
+     *   <li><b>Per-slot</b>: set {@code slotAllocations} — map of slotId → roomId</li>
+     * </ul>
+     */
     public static class ApproveBody {
         public Long allocatedResourceId;
         public Long allocatedRoomId;
+        public List<SlotAllocation> slotAllocations;
     }
 
-    private boolean claimIsActive(ResourceBookingRequest r) {
-        if (r.getClaimedAt() == null || r.getClaimedBy() == null) {
-            return false;
-        }
-        return !r.getClaimedAt().plusMinutes(CLAIM_EXPIRY_MINUTES).isBefore(LocalDateTime.now());
-    }
-
-    private boolean callerOwnsActiveClaim(ResourceBookingRequest r, String username) {
-        return claimIsActive(r) && r.getClaimedBy() != null
-                && username.equals(r.getClaimedBy().getUsername());
-    }
-
-    @PostMapping("/{id}/claim")
-    @Transactional
-    public ResponseEntity<?> claim(@PathVariable Long id, @AuthenticationPrincipal UserDetails principal) {
-        ResourceBookingRequest req = requestRepo.findByIdForUpdate(id).orElse(null);
-        if (req == null) {
-            return ResponseEntity.notFound().build();
-        }
-        User currentUser = userRepository.findByUsername(principal.getUsername()).orElse(null);
-        if (currentUser == null) {
-            return ResponseEntity.status(403).body("Not allowed to claim this request");
-        }
-        boolean isSuperAdmin = currentUser.getRoles().contains(Role.ADMIN);
-        boolean isBuildingAdmin = currentUser.getRoles().contains(Role.BUILDING_ADMIN);
-        boolean adminIsBounded = currentUser.getManagedBuildingId() != null && currentUser.getAdminScope() != null;
-        boolean bypassChecks = isSuperAdmin && !adminIsBounded;
-        if (!bypassChecks) {
-            if (!(isBuildingAdmin || isSuperAdmin) || !visibleToBuildingAdmin(req, currentUser)) {
-                return ResponseEntity.status(403).body("Not allowed to claim this request");
-            }
-        }
-        if (req.getStatus() != RoomBookingStatus.PENDING) {
-            return ResponseEntity.badRequest().body("Only pending requests can be claimed");
-        }
-        LocalDateTime now = LocalDateTime.now();
-        if (claimIsActive(req)) {
-            if (!principal.getUsername().equals(req.getClaimedBy().getUsername())) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body("This request is already claimed by another administrator");
-            }
-            return ResponseEntity.ok(Map.of(
-                    "message", "Already claimed by you",
-                    "claimedAt", req.getClaimedAt(),
-                    "claimExpiresAt", req.getClaimedAt().plusMinutes(CLAIM_EXPIRY_MINUTES)));
-        }
-        req.setClaimedBy(currentUser);
-        req.setClaimedAt(now);
-        requestRepo.save(req);
-        return ResponseEntity.ok(Map.of(
-                "claimedAt", now,
-                "claimExpiresAt", now.plusMinutes(CLAIM_EXPIRY_MINUTES),
-                "claimedBy", principal.getUsername()));
+    public static class SlotAllocation {
+        public Long slotId;
+        public Long roomId;
     }
 
     @PostMapping("/{id}/approve")
@@ -347,42 +312,54 @@ public class AdminResourceBookingController {
             }
         }
 
-        LocalDateTime reqStart;
-        LocalDateTime reqEnd;
-        if (req.getEvent() != null && req.getEvent().getStartTime() != null && req.getEvent().getEndTime() != null) {
-            reqStart = req.getEvent().getStartTime();
-            reqEnd = req.getEvent().getEndTime();
-        } else if (req.getMeetingStart() != null && req.getMeetingEnd() != null) {
-            reqStart = req.getMeetingStart();
-            reqEnd = req.getMeetingEnd();
+        // ── SLOT-BASED ALLOCATION ──
+        List<RoomBookingSlot> bookingSlots = bookingSlotService.getSlotsForRequest(req.getId());
+
+        boolean isPerSlot = body.slotAllocations != null && !body.slotAllocations.isEmpty();
+
+        if (isPerSlot) {
+            // Per-slot allocation: validate each slot's room
+            Map<Long, Long> slotRoomMap = new LinkedHashMap<>();
+            for (SlotAllocation sa : body.slotAllocations) {
+                if (sa.slotId == null || sa.roomId == null) continue;
+                Room slotRoom = roomRepo.findById(sa.roomId).orElse(null);
+                if (slotRoom == null) {
+                    return ResponseEntity.badRequest().body("Room not found for slot " + sa.slotId);
+                }
+                // Per-slot conflict check
+                RoomBookingSlot slot = bookingSlots.stream()
+                        .filter(s -> s.getId().equals(sa.slotId)).findFirst().orElse(null);
+                if (slot == null) {
+                    return ResponseEntity.badRequest().body("Slot not found: " + sa.slotId);
+                }
+                List<String> dayConflicts = scheduleService.getRoomConflictsForSlot(
+                        sa.roomId, slot.getSlotDate(), slot.getStartTime(), slot.getEndTime());
+                if (!dayConflicts.isEmpty()) {
+                    return ResponseEntity.badRequest().body(
+                            "Room conflict on " + slot.getSlotDate() + ": " + dayConflicts);
+                }
+                slotRoomMap.put(sa.slotId, sa.roomId);
+            }
+            bookingSlotService.allocateRoomsPerSlot(req, slotRoomMap);
         } else {
-            reqStart = null;
-            reqEnd = null;
+            // Bulk allocation: same room for ALL slots — must be available for every one
+            for (RoomBookingSlot slot : bookingSlots) {
+                if (!bookingSlotService.isSlotAvailable(alloc.getId(), slot.getSlotDate(),
+                        slot.getStartTime(), slot.getEndTime())) {
+                    return ResponseEntity.badRequest().body(
+                            "Room '" + alloc.getName() + "' has a conflict on " + slot.getSlotDate()
+                            + " (" + slot.getStartTime() + "–" + slot.getEndTime() + ")");
+                }
+                List<String> dayConflicts = scheduleService.getRoomConflictsForSlot(
+                        alloc.getId(), slot.getSlotDate(), slot.getStartTime(), slot.getEndTime());
+                if (!dayConflicts.isEmpty()) {
+                    return ResponseEntity.badRequest().body(
+                            "Timetable conflict on " + slot.getSlotDate() + ": " + dayConflicts);
+                }
+            }
+            bookingSlotService.allocateRoomToAllSlots(req, alloc);
         }
 
-        // Multi-slot aware conflict check at approval time
-        if (reqStart != null && reqEnd != null) {
-
-            // Per-slot conflict check using schedule service (multi-day aware)
-            List<EventTimeSlot> slots = req.getEvent() != null
-                    ? eventTimeSlotRepository.findByEvent_IdOrderBySlotStartAsc(req.getEvent().getId())
-                    : java.util.Collections.emptyList();
-            Map<String, List<String>> slotConflicts;
-            if (slots.size() > 1) {
-                slotConflicts = scheduleService.validateEventRoomPreferencesMultiSlot(
-                        alloc.getId(), null, null, slots);
-            } else {
-                slotConflicts = scheduleService.validateEventRoomPreferences(
-                        alloc.getId(), null, null, reqStart, reqEnd);
-            }
-            List<String> allocConflicts = slotConflicts.getOrDefault(alloc.getId().toString(), java.util.Collections.emptyList());
-            if (!allocConflicts.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body("Allocated room has schedule conflicts: " + allocConflicts);
-            }
-        }
-
-        req.setAllocatedResource(alloc);
         req.setStatus(RoomBookingStatus.APPROVED);
         req.setApprovedAt(LocalDateTime.now());
         req.setApprovedByUsername(principal.getUsername());
@@ -412,9 +389,10 @@ public class AdminResourceBookingController {
 
         // ── Notify requester ────────────────────────────────────────────────
         if (req.getRequestedByUsername() != null) {
+            String roomDesc = isPerSlot ? "per-day rooms" : ("room '" + alloc.getName() + "'");
             userRepository.findByUsername(req.getRequestedByUsername()).ifPresent(u -> {
                 String subj = "Room request approved";
-                String msg = "Your room request (ID " + req.getId() + ") has been approved for room '" + alloc.getName() + "'.";
+                String msg = "Your room request (ID " + req.getId() + ") has been approved for " + roomDesc + ".";
                 notificationService.notifyAllChannels(u, subj, msg);
             });
         }
@@ -466,6 +444,10 @@ public class AdminResourceBookingController {
         return ResponseEntity.ok("Rejected");
     }
 
+    /**
+     * Per-day conflict check using the slot-based model.
+     * Returns per-room, per-day conflict structure.
+     */
     @GetMapping("/{id}/conflicts")
     @Transactional(readOnly = true)
     public ResponseEntity<?> getConflicts(@PathVariable Long id, @AuthenticationPrincipal UserDetails principal) {
@@ -477,9 +459,9 @@ public class AdminResourceBookingController {
         if (currentUser == null) {
             return ResponseEntity.status(403).build();
         }
-        boolean isSuperAdmin = currentUser != null && currentUser.getRoles().contains(Role.ADMIN);
-        boolean isBuildingAdmin = currentUser != null && currentUser.getRoles().contains(Role.BUILDING_ADMIN);
-        boolean adminIsBounded = currentUser != null && currentUser.getManagedBuildingId() != null && currentUser.getAdminScope() != null;
+        boolean isSuperAdmin = currentUser.getRoles().contains(Role.ADMIN);
+        boolean isBuildingAdmin = currentUser.getRoles().contains(Role.BUILDING_ADMIN);
+        boolean adminIsBounded = currentUser.getManagedBuildingId() != null && currentUser.getAdminScope() != null;
         boolean bypassChecks = isSuperAdmin && !adminIsBounded;
 
         if (!bypassChecks) {
@@ -488,33 +470,38 @@ public class AdminResourceBookingController {
             }
         }
 
-        LocalDateTime start = req.getEvent() != null ? req.getEvent().getStartTime() : req.getMeetingStart();
-        LocalDateTime end = req.getEvent() != null ? req.getEvent().getEndTime() : req.getMeetingEnd();
+        // Get the booking slots for this request
+        List<RoomBookingSlot> bookingSlots = bookingSlotService.getSlotsForRequest(req.getId());
 
-        if (start == null || end == null) {
+        // Collect unique preference room IDs
+        List<Long> prefRoomIds = Stream.of(
+                req.getPref1() != null ? req.getPref1().getId() : null,
+                req.getPref2() != null ? req.getPref2().getId() : null,
+                req.getPref3() != null ? req.getPref3().getId() : null
+        ).filter(x -> x != null).distinct().collect(Collectors.toList());
+
+        if (bookingSlots.isEmpty() || prefRoomIds.isEmpty()) {
             return ResponseEntity.ok(Map.of());
         }
 
-        List<EventTimeSlot> slots = req.getEvent() != null
-                ? eventTimeSlotRepository.findByEvent_IdOrderBySlotStartAsc(req.getEvent().getId())
-                : java.util.Collections.emptyList();
+        // Build per-day, per-room conflict map using slot-based model
+        Map<String, List<Map<String, Object>>> conflicts = bookingSlotService.getPerDayConflicts(prefRoomIds, bookingSlots);
 
-        Map<String, List<String>> conflicts;
-        if (slots.size() > 1) {
-            conflicts = scheduleService.validateEventRoomPreferencesMultiSlot(
-                    req.getPref1() != null ? req.getPref1().getId() : null,
-                    req.getPref2() != null ? req.getPref2().getId() : null,
-                    req.getPref3() != null ? req.getPref3().getId() : null,
-                    slots
-            );
-        } else {
-            conflicts = scheduleService.validateEventRoomPreferences(
-                    req.getPref1() != null ? req.getPref1().getId() : null,
-                    req.getPref2() != null ? req.getPref2().getId() : null,
-                    req.getPref3() != null ? req.getPref3().getId() : null,
-                    start, end
-            );
+        // Enrich with timetable conflicts from ScheduleService
+        for (Long roomId : prefRoomIds) {
+            List<Map<String, Object>> dayList = conflicts.get(roomId.toString());
+            if (dayList == null) continue;
+            for (Map<String, Object> dayInfo : dayList) {
+                java.time.LocalDate date = java.time.LocalDate.parse((String) dayInfo.get("date"));
+                java.time.LocalTime st = java.time.LocalTime.parse((String) dayInfo.get("startTime"));
+                java.time.LocalTime et = java.time.LocalTime.parse((String) dayInfo.get("endTime"));
+                List<String> timetableIssues = scheduleService.getRoomConflictsForSlot(roomId, date, st, et);
+                @SuppressWarnings("unchecked")
+                List<String> issues = (List<String>) dayInfo.get("issues");
+                issues.addAll(timetableIssues);
+            }
         }
+
         return ResponseEntity.ok(conflicts);
     }
 }

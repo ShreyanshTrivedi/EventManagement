@@ -255,6 +255,8 @@ export default function AdminRoomApprovals() {
 
 function ApprovalItem({ req, resources, onClaim, onApprove, onReject, hasRole, currentUsername }) {
   const [alloc, setAlloc] = useState('')
+  const [perSlotMode, setPerSlotMode] = useState(false)
+  const [slotAllocations, setSlotAllocations] = useState({}) // { slotId: roomId }
   const [conflicts, setConflicts] = useState(null)
   const [loadingConflicts, setLoadingConflicts] = useState(false)
 
@@ -285,6 +287,8 @@ function ApprovalItem({ req, resources, onClaim, onApprove, onReject, hasRole, c
     return true
   })
 
+  const isMultiSlot = req.bookingSlots && req.bookingSlots.length > 1
+
   const checkConflicts = async () => {
     setLoadingConflicts(true)
     try {
@@ -295,6 +299,30 @@ function ApprovalItem({ req, resources, onClaim, onApprove, onReject, hasRole, c
     } finally {
       setLoadingConflicts(false)
     }
+  }
+
+  const handleApprove = () => {
+    if (perSlotMode && isMultiSlot) {
+      // Per-slot mode: send slotAllocations
+      const entries = Object.entries(slotAllocations)
+        .filter(([, roomId]) => roomId)
+        .map(([slotId, roomId]) => ({ slotId: Number(slotId), roomId: Number(roomId) }))
+      if (entries.length === 0) return
+      onApprove(req.id, null, entries)
+    } else {
+      // Bulk mode
+      if (!alloc) return
+      onApprove(req.id, Number(alloc))
+    }
+  }
+
+  // Resolve room name from ID for conflict display
+  const getRoomName = (roomId) => {
+    if (String(req.pref1Id) === String(roomId)) return req.pref1
+    if (String(req.pref2Id) === String(roomId)) return req.pref2
+    if (String(req.pref3Id) === String(roomId)) return req.pref3
+    const found = rooms.find(r => String(r.id) === String(roomId))
+    return found ? found.name : `Room ${roomId}`
   }
 
   return (
@@ -320,29 +348,36 @@ function ApprovalItem({ req, resources, onClaim, onApprove, onReject, hasRole, c
               Split approval: approving this row rejects other pending parts in the same group ({String(req.splitGroupId).slice(0, 8)}…).
             </div>
           )}
-          <div className="mt-1 text-sm text-[#9CA3AF]">Starts: {formatDateTime(req.start)}</div>
-          
-          {req.timingModel && req.timingModel !== 'SINGLE_DAY' && (
+
+          {/* Per-day booking slots display */}
+          {req.bookingSlots && req.bookingSlots.length > 0 && (
             <div className="mt-2 mb-2 p-3 bg-[#0F172A] border border-[#1F2937] rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold px-2 py-1 bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">
-                  {req.timingModel.replace(/_/g, ' ')} ({req.slotCount || 1} Days)
+                  {isMultiSlot ? `MULTI-DAY (${req.bookingSlots.length} Slots)` : 'SINGLE-DAY'}
                 </span>
+                {req.timingModel && req.timingModel !== 'SINGLE_DAY' && (
+                  <span className="text-xs text-[#6B7280]">{req.timingModel.replace(/_/g, ' ')}</span>
+                )}
               </div>
-              {req.slots && req.slots.length > 0 && (
-                <div className="space-y-1 mt-2 border-t border-[#1F2937] pt-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                  {req.slots.map((slot, idx) => (
-                    <div key={idx} className="flex justify-between text-xs text-[#9CA3AF]">
-                      <span>Day {idx + 1}: <span className="text-[#E5E7EB]">{formatDateOnly(slot.slotStart)}</span></span>
-                      <span className="text-[#E5E7EB]">
-                        {formatTimeOnly(slot.slotStart)} - {formatTimeOnly(slot.slotEnd)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-1 mt-2 border-t border-[#1F2937] pt-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                {req.bookingSlots.map((slot, idx) => (
+                  <div key={slot.id || idx} className="flex justify-between items-center text-xs text-[#9CA3AF]">
+                    <span>
+                      Day {idx + 1}: <span className="text-[#E5E7EB]">{slot.date}</span>
+                    </span>
+                    <span className="text-[#E5E7EB]">
+                      {slot.startTime} – {slot.endTime}
+                    </span>
+                    {slot.roomName && (
+                      <span className="text-emerald-400 ml-2">→ {slot.roomName}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
           <div className="text-sm text-[#9CA3AF]">Requested by: {req.requestedBy}</div>
 
           <div className="text-sm text-[#9CA3AF] mt-1">
@@ -372,6 +407,7 @@ function ApprovalItem({ req, resources, onClaim, onApprove, onReject, hasRole, c
             </div>
           )}
 
+          {/* Per-day conflict display */}
           <div className="mt-3">
             {!conflicts ? (
               <button
@@ -380,72 +416,91 @@ function ApprovalItem({ req, resources, onClaim, onApprove, onReject, hasRole, c
                 onClick={checkConflicts}
                 disabled={loadingConflicts}
               >
-                {loadingConflicts ? 'Checking conflicts...' : 'Check timetable conflicts'}
+                {loadingConflicts ? 'Checking conflicts...' : 'Check per-day conflicts'}
               </button>
             ) : (
               <div className="text-sm p-3 rounded-lg border border-[#1F2937] bg-[#0F172A]">
-                <div className="font-semibold mb-1 text-[#E5E7EB]">Conflicts Check:</div>
+                <div className="font-semibold mb-2 text-[#E5E7EB]">Per-Day Conflict Analysis:</div>
                 {Object.keys(conflicts).length === 0 ? (
                   <span className="text-emerald-400">No conflicts found.</span>
                 ) : (
-                  <ul className="list-disc pl-5 space-y-1 text-rose-400">
-                    {Object.entries(conflicts).map(([pref, issues]) => (
-                      <li key={pref}>
-                        <strong className="text-[#E5E7EB]">
-                          Room {String(req.pref1Id) === String(pref) ? req.pref1
-                            : String(req.pref2Id) === String(pref) ? req.pref2
-                            : String(req.pref3Id) === String(pref) ? req.pref3
-                            : pref}:
-                        </strong>{' '}
-                        {issues.length === 0 ? <span className="text-emerald-400">Clear</span> : issues.join(', ')}
-                      </li>
+                  <div className="space-y-3">
+                    {Object.entries(conflicts).map(([roomId, dayList]) => (
+                      <div key={roomId}>
+                        <div className="font-medium text-[#C4B5FD] mb-1">
+                          {getRoomName(roomId)}
+                        </div>
+                        {Array.isArray(dayList) && dayList.map((day, i) => {
+                          const issues = Array.isArray(day.issues) ? day.issues : (Array.isArray(day) ? day : [])
+                          const dateStr = day.date || `Day ${i + 1}`
+                          return (
+                            <div key={i} className="flex items-start gap-2 text-xs ml-3 mb-1">
+                              <span className="text-[#9CA3AF] shrink-0">{dateStr}:</span>
+                              {issues.length === 0
+                                ? <span className="text-emerald-400">Clear</span>
+                                : <span className="text-rose-400">{issues.join('; ')}</span>
+                              }
+                            </div>
+                          )
+                        })}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </div>
             )}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => onClaim(req.id)}
-            disabled={canAct || claimedByOtherActive}
-            title={claimedByOtherActive ? 'Already claimed by another admin' : ''}
-          >
-            Claim
-          </button>
-          <select
-            className="form-select min-w-[12rem]"
-            value={alloc}
-            onChange={(e) => setAlloc(e.target.value)}
-            disabled={!canAct}
-          >
-            <option value="" disabled>Allocate resource...</option>
-            {allocatableResources.map(r => (
-              <option key={r.id} value={r.id}>
-                {r.buildingName ? `${r.buildingName} - ` : ''}{r.name}
-                {r.resourceType ? ` [${r.resourceType}]` : ''} ({r.capacity || 0})
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            disabled={!canAct}
-            onClick={() => onApprove(req.id, Number(alloc))}
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={!canAct}
-            onClick={() => onReject(req.id)}
-          >
-            Reject
-          </button>
+
+        {/* Allocation controls */}
+        <div className="flex flex-col gap-2 shrink-0 min-w-[14rem]">
+          {isMultiSlot && (
+            <label className="flex items-center gap-2 text-xs text-[#9CA3AF] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={perSlotMode}
+                onChange={(e) => setPerSlotMode(e.target.checked)}
+                className="rounded border-[#374151] bg-[#1F2937] text-purple-500"
+              />
+              Per-day room allocation
+            </label>
+          )}
+
+          {perSlotMode && isMultiSlot ? (
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+              {req.bookingSlots.map((slot, idx) => (
+                <div key={slot.id || idx} className="flex items-center gap-1">
+                  <span className="text-xs text-[#9CA3AF] w-20 shrink-0">{slot.date}</span>
+                  <select
+                    className="form-select text-xs flex-1"
+                    value={slotAllocations[slot.id] || ''}
+                    onChange={(e) => setSlotAllocations(prev => ({ ...prev, [slot.id]: e.target.value }))}
+                  >
+                    <option value="" disabled>Room…</option>
+                    {allocatableRooms.map(r => (
+                      <option key={r.id} value={r.id}>{r.name} ({r.capacity || 0})</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <select
+              className="form-select min-w-[12rem]"
+              value={alloc}
+              onChange={(e) => setAlloc(e.target.value)}
+            >
+              <option value="" disabled>{isMultiSlot ? 'Same room all days…' : 'Allocate room...'}</option>
+              {allocatableRooms.map(r => (
+                <option key={r.id} value={r.id}>{r.buildingName ? `${r.buildingName} - ` : ''}{r.name} ({r.capacity || 0})</option>
+              ))}
+            </select>
+          )}
+
+          <div className="flex gap-2">
+            <button type="button" className="btn btn-primary btn-sm flex-1" onClick={handleApprove}>Approve</button>
+            <button type="button" className="btn btn-secondary btn-sm flex-1" onClick={() => onReject(req.id)}>Reject</button>
+          </div>
         </div>
       </div>
     </div>

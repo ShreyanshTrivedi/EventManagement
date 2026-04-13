@@ -22,13 +22,16 @@ public class ConfirmBookingScheduler {
     private final EventRepository eventRepo;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final BookingSlotService bookingSlotService;
 
-    public ConfirmBookingScheduler(ResourceBookingRequestRepository requestRepo, EventRepository eventRepo,
-                                   UserRepository userRepository, NotificationService notificationService) {
+    public ConfirmBookingScheduler(RoomBookingRequestRepository requestRepo, EventRepository eventRepo,
+                                   UserRepository userRepository, NotificationService notificationService,
+                                   BookingSlotService bookingSlotService) {
         this.requestRepo = requestRepo;
         this.eventRepo = eventRepo;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
+        this.bookingSlotService = bookingSlotService;
     }
 
     // Run hourly at minute 0
@@ -49,6 +52,8 @@ public class ConfirmBookingScheduler {
                 r.setStatus(RoomBookingStatus.CONFIRMED);
                 r.setConfirmedAt(LocalDateTime.now());
                 requestRepo.save(r);
+                // Update all slot statuses to CONFIRMED
+                bookingSlotService.updateSlotStatuses(r.getId(), "CONFIRMED");
                 log.info("Confirmed room for event {} (request {})", evt.getId(), r.getId());
                 if (r.getRequestedByUsername() != null) {
                     userRepository.findByUsername(r.getRequestedByUsername()).ifPresent(u -> {
@@ -63,3 +68,4 @@ public class ConfirmBookingScheduler {
         }
     }
 }
+

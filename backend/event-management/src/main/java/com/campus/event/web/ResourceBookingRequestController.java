@@ -19,6 +19,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import com.campus.event.service.BookingSlotService;
 import com.campus.event.service.BuildingTimetableService;
 import com.campus.event.service.EventRoomBookingSplitService;
 
@@ -41,13 +42,15 @@ public class ResourceBookingRequestController {
     private final EventRoomBookingSplitService eventRoomBookingSplitService;
     private final EventTimeSlotRepository eventTimeSlotRepository;
     private final com.campus.event.service.RoomAvailabilityService availabilityService;
+    private final BookingSlotService bookingSlotService;
 
     public ResourceBookingRequestController(ResourceBookingRequestRepository requestRepo, EventRepository eventRepo, ResourceRepository resourceRepo,
                                             com.campus.event.service.ScheduleService scheduleService,
                                         BuildingTimetableService buildingTimetableService,
                                         EventRoomBookingSplitService eventRoomBookingSplitService,
                                         EventTimeSlotRepository eventTimeSlotRepository,
-                                        com.campus.event.service.RoomAvailabilityService availabilityService) {
+                                        com.campus.event.service.RoomAvailabilityService availabilityService,
+                                        BookingSlotService bookingSlotService) {
         this.requestRepo = requestRepo;
         this.eventRepo = eventRepo;
         this.resourceRepo = resourceRepo;
@@ -56,6 +59,7 @@ public class ResourceBookingRequestController {
         this.eventRoomBookingSplitService = eventRoomBookingSplitService;
         this.eventTimeSlotRepository = eventTimeSlotRepository;
         this.availabilityService = availabilityService;
+        this.bookingSlotService = bookingSlotService;
     }
 
     public static class CreateRequest {
@@ -183,9 +187,11 @@ public class ResourceBookingRequestController {
         if (eventMode) {
             List<ResourceBookingRequest> toSave = eventRoomBookingSplitService.buildEventRequests(event, r1, r2, r3, principal.getUsername());
             List<Long> ids = new ArrayList<>();
-            ResourceBookingRequest first = null;
-            for (ResourceBookingRequest rr : toSave) {
-                ResourceBookingRequest saved = requestRepo.save(rr);
+            RoomBookingRequest first = null;
+            for (RoomBookingRequest rr : toSave) {
+                RoomBookingRequest saved = requestRepo.save(rr);
+                // Generate per-day booking slots for this request
+                bookingSlotService.generateSlots(saved);
                 ids.add(saved.getId());
                 if (first == null) {
                     first = saved;
@@ -214,7 +220,9 @@ public class ResourceBookingRequestController {
         rr.setPref3(r3);
         rr.setStatus(RoomBookingStatus.PENDING);
         rr.setRequestedByUsername(principal.getUsername());
-        ResourceBookingRequest saved = requestRepo.save(rr);
+        RoomBookingRequest saved = requestRepo.save(rr);
+        // Generate booking slots for this meeting request
+        bookingSlotService.generateSlots(saved);
         return ResponseEntity.ok(Map.of("id", saved.getId(), "status", saved.getStatus().name(), "conflicts", conflicts));
     }
 
@@ -266,15 +274,11 @@ public class ResourceBookingRequestController {
         bookingRequest.setApprovedByUsername(principal.getUsername());
         bookingRequest.setRequestedByUsername(principal.getUsername());
         
-        ResourceBookingRequest saved = requestRepo.save(bookingRequest);
-        long legacyRoomId = resource.getRoomRefId() != null ? resource.getRoomRefId() : resource.getId();
-        return ResponseEntity.ok(Map.of(
-                "id", saved.getId(),
-                "status", saved.getStatus().name(),
-                "allocatedRoom", resource.getName(),
-                "resourceId", resource.getId(),
-                "roomId", legacyRoomId
-        ));
+        RoomBookingRequest saved = requestRepo.save(bookingRequest);
+        // Generate slot and mark as APPROVED (instant booking)
+        bookingSlotService.generateSlots(saved);
+        bookingSlotService.allocateRoomToAllSlots(saved, room);
+        return ResponseEntity.ok(Map.of("id", saved.getId(), "status", saved.getStatus().name(), "allocatedRoom", room.getName()));
     }
 
     @GetMapping("/mine")

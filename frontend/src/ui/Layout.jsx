@@ -180,11 +180,8 @@ export default function Layout({ children }) {
       {/* Footer */}
       <footer className="bg-[#0B0F19] border-t border-[#1F2937] mt-12">
         <Container className="py-8">
-          <div className="text-center text-slate-400">
-            <p>&copy; 2024 EventSphere. Built with React &amp; Spring Boot.</p>
-            <div className="mt-2 text-sm">
-              <a href="/style-guide" className="nav-link">Style guide</a>
-            </div>
+          <div className="text-center text-slate-400 text-sm">
+            <p>&copy; {new Date().getFullYear()} Campus Event System. All rights reserved.</p>
           </div>
         </Container>
       </footer>

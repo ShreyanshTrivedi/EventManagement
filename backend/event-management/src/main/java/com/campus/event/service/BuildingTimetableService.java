@@ -23,12 +23,24 @@ public class BuildingTimetableService {
     /**
      * True when every local-time segment of [start, end] on each calendar day touched
      * lies fully inside at least one configured window for {@code buildingId}.
+     * <p>
+     * Handles overnight events (e.g. 15:00 → 05:00) by splitting at midnight:
+     * Day 1: 15:00 → 23:59, Day 2: 00:00 → 05:00
      */
     @Transactional(readOnly = true)
     public boolean isBookingWithinBuildingHours(Long buildingId, LocalDateTime start, LocalDateTime end) {
-        if (buildingId == null || start == null || end == null || !end.isAfter(start)) {
+        if (buildingId == null || start == null || end == null) {
             return true;
         }
+
+        // Handle overnight: if end is not after start but dates differ, it's a valid overnight event
+        if (!end.isAfter(start)) {
+            // Same date and end <= start is truly invalid
+            if (start.toLocalDate().equals(end.toLocalDate())) {
+                return true; // let other validators catch this
+            }
+        }
+
         LocalDate day = start.toLocalDate();
         LocalDate last = end.toLocalDate();
         while (!day.isAfter(last)) {
